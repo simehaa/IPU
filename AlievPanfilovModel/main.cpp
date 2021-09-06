@@ -226,48 +226,48 @@ int main (int argc, char** argv) {
       }
     }
 
-    // Create graph object
-    poplar::Graph graph{target};
-    graph.addCodelets("codelets.gp");
+    // // Create graph object
+    // poplar::Graph graph{target};
+    // graph.addCodelets("codelets.gp");
 
-    // Create programs
-    auto programs = createIpuPrograms(graph, options);
+    // // Create programs
+    // auto programs = createIpuPrograms(graph, options);
     
-    // Compile graph and programs
-    auto exe = poplar::compileGraph(graph, programs);
+    // // Compile graph and programs
+    // auto exe = poplar::compileGraph(graph, programs);
     
-    // Create Engine object
-    poplar::Engine engine(std::move(exe));
-    engine.connectStream("host_to_device_stream_e", &initial_e[0], &initial_e[area]);
-    engine.connectStream("host_to_device_stream_r", &initial_r[0], &initial_r[area]);
-    engine.connectStream("device_to_host_stream_e", &ipu_results_e[0], &ipu_results_e[area]);
-    engine.connectStream("device_to_host_stream_r", &ipu_results_r[0], &ipu_results_r[area]);
-    engine.load(device);
-    engine.run(0);
-    auto start = std::chrono::steady_clock::now();
-    engine.run(1); // Compute set execution
-    auto stop = std::chrono::steady_clock::now();
-    engine.run(2);
+    // // Create Engine object
+    // poplar::Engine engine(std::move(exe));
+    // engine.connectStream("host_to_device_stream_e", &initial_e[0], &initial_e[area]);
+    // engine.connectStream("host_to_device_stream_r", &initial_r[0], &initial_r[area]);
+    // engine.connectStream("device_to_host_stream_e", &ipu_results_e[0], &ipu_results_e[area]);
+    // engine.connectStream("device_to_host_stream_r", &ipu_results_r[0], &ipu_results_r[area]);
+    // engine.load(device);
+    // engine.run(0);
+    // auto start = std::chrono::steady_clock::now();
+    // engine.run(1); // Compute set execution
+    // auto stop = std::chrono::steady_clock::now();
+    // engine.run(2);
 
-    // Results
-    auto diff = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
-    double wall_time = 1e-9*diff.count();
-    double flops_per_element = 27.0;
-    double flops = inner_area * options.num_iterations * flops_per_element / wall_time;
-    double loaded_elems_per_stencil = 6 + 2; // 6 for e, 2 for r
-    double stored_elems_per_stencil = 2; // 1 for e, 1 for r
-    double total_elems_per_stencil = loaded_elems_per_stencil + stored_elems_per_stencil;
-    double bandwidth_base = inner_area * options.num_iterations * sizeof(float) / wall_time;
-    double load_bw = loaded_elems_per_stencil*bandwidth_base;
-    double store_bw = stored_elems_per_stencil*bandwidth_base;
-    double total_bw = total_elems_per_stencil*bandwidth_base;
-    printPerformance(flops, load_bw, store_bw, total_bw);
+    // // Results
+    // auto diff = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
+    // double wall_time = 1e-9*diff.count();
+    // double flops_per_element = 27.0;
+    // double flops = inner_area * options.num_iterations * flops_per_element / wall_time;
+    // double loaded_elems_per_stencil = 6 + 2; // 6 for e, 2 for r
+    // double stored_elems_per_stencil = 2; // 1 for e, 1 for r
+    // double total_elems_per_stencil = loaded_elems_per_stencil + stored_elems_per_stencil;
+    // double bandwidth_base = inner_area * options.num_iterations * sizeof(float) / wall_time;
+    // double load_bw = loaded_elems_per_stencil*bandwidth_base;
+    // double store_bw = stored_elems_per_stencil*bandwidth_base;
+    // double total_bw = total_elems_per_stencil*bandwidth_base;
+    // printPerformance(flops, load_bw, store_bw, total_bw);
 
     if (options.cpu) {
       std::vector<float> cpu_results_e(area);
       std::vector<float> cpu_results_r(area);
       solveAlievPanfilovCpu(initial_e, initial_r, cpu_results_e, cpu_results_r, options);
-      reportCpuVsIpu(cpu_results_e, cpu_results_r, ipu_results_e, ipu_results_r, options);
+      // reportCpuVsIpu(cpu_results_e, cpu_results_r, ipu_results_e, ipu_results_r, options);
     }
 
     // End of try block

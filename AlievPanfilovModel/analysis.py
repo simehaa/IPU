@@ -9,7 +9,7 @@ def animate(i):
 	print(f'\rCreating gif: {(i+1)/frames*100:1.1f}%', end='')
 
 if __name__ == '__main__':
-	frames = 100
+	frames = 200
 	e = [pd.read_csv(f"./data/e{i}.csv", header=None) for i in range(frames)]
 	r = [pd.read_csv(f"./data/r{i}.csv", header=None) for i in range(frames)]
 	fig, (ax1, ax2) = plt.subplots(1, 2)
@@ -21,5 +21,5 @@ if __name__ == '__main__':
 	cbar_ax = fig.add_axes([0.85, 0.29, 0.05, 0.41]) # colorbar right to the subplots
 	plt.colorbar(im2, cax=cbar_ax)
 	ani = animation.FuncAnimation(fig, animate, frames)
-	ani.save('AlievPanfilov.gif', fps=24)
+	ani.save('AlievPanfilov.gif', fps=16)
 	print(", Done!")

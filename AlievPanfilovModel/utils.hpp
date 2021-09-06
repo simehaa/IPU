@@ -312,7 +312,7 @@ void solveAlievPanfilovCpu(
         cpu_e[j+i*w] = temp_e[j+i*w];
       }
     }
-    if (t % 1000 == 0 && options.save_cpu) {
+    if (t % 500 == 0 && options.save_cpu) {
       save2dVector(cpu_e, options, "./data/e"+std::to_string(c)+".csv");
       save2dVector(cpu_r, options, "./data/r"+std::to_string(c)+".csv");
       c++; // nice
