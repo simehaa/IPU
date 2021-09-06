@@ -1,4 +1,9 @@
 # Custom
+main
+*.gp
+*.S
+*.pyc
+*__pycache__*
 *figures*
 *data*
 
