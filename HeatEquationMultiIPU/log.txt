@@ -1,0 +1,15 @@
+[?1049h[22;0;0t[1;30r(B[m[4l[?7h[H[2JEvery 2.0s: free[1;75Hipu-pod64-server1: Thu Aug 26 14:35:45 2021[3;15Htotal[3;28Hused[3;40Hfree[50Gshared  buff/cache   available[4dMem:[11G791203124    17352184   769644492     2330604     4206448   767600136[5dSwap:[13G2097148     2094300[5;40H2848[30;117H[1;112H7[4;28H850[4;39H380[4;65H52[74G594124[30;117H[1;112H9[4;27H90120[39G06476[4;75H69828[30;117H[1;111H52[4;28H1152[4;40H5444[4;76H8824[30;117H[1;112H4[4;26H444348[38G552248[4;75H21376[30;117H[30;1H[?1049l[23;0;0t[?1l>[?1049h[22;0;0t[1;30r(B[m[4l[?7h[H[2JEvery 2.0s: free[1;75Hipu-pod64-server1: Thu Aug 26 14:40:20 2021[3;15Htotal[3;28Hused[3;40Hfree[50Gshared  buff/cache   available[4dMem:[11G791203124    26055096   760938440     2330604     4209588   759081076[5dSwap:[13G2097148     2094300[5;40H2848[30;117H[1;112H2[4;28H161[4;39H4192[4;76H455[30;117H[1;112H4[4;25H7066036   759792876[4;62H344212   758264772[30;117H[1;112H6[4;26H99081[37G8182448[4;61H5029860   757331020[30;117H[1;112H8[4;25H5388080   760785184[4;73H9933756[30;117H[30;1H[?1049l[23;0;0t[?1l>              total        used        free      shared  buff/cache   available
+Mem:           791G         16G        770G        2.3G        4.2G        768G
+Swap:          2.1G        2.1G        2.8M
+
+              total        used        free      shared  buff/cache   available
+Mem:           791G         16G        770G        2.3G        4.2G        768G
+Swap:          2.1G        2.1G        2.8M
+
+              total        used        free      shared  buff/cache   available
+Mem:           791G         16G        770G        2.3G        4.2G        768G
+Swap:          2.1G        2.1G        2.8M
+
+              total        used        free      shared  buff/cache   available
+Mem:           791G         16G        770G        2.3G        4.2G        768G
+Swap:          2.1G        2.1G        2.8M
