@@ -273,7 +273,6 @@ void solveAlievPanfilovCpu(
   int h = options.height;
   float rhs;
   std::vector<float> temp_e(N);
-  std::vector<float> temp_r(N);
   for (int i = 0 ; i < N; ++i) {
     cpu_e[i] = initial_e[i];
     cpu_r[i] = initial_r[i];
@@ -365,18 +364,16 @@ void reportCpuVsIpu(std::vector<float> cpu_e, std::vector<float> cpu_r,
   std::size_t h = options.height;
   float MSE_e = 0;
   float MSE_r = 0;
-  for (int i = 1; i < options.height - 1; ++i) {
-    for (int j = 1; j < options.width - 1; ++j) {
+  for (int i = 0; i < options.height; ++i) {
+    for (int j = 0; j < options.width; ++j) {
       float diff_e = cpu_e[j + i*w] - ipu_e[j + i*w];
       float diff_r = cpu_r[j + i*w] - ipu_r[j + i*w];
       MSE_e += diff_e*diff_e;
       MSE_r += diff_r*diff_r;
-      // if (diff_e != 0) std::cout << "e: element " << i << "," << j << ": diff=" << diff_e << "\n";
-      // if (diff_r != 0) std::cout << "r: element " << i << "," << j << ": diff=" << diff_r << "\n";
     }
   }
-  MSE_e /= (w - 2)*(h - 2);
-  MSE_r /= (w - 2)*(h - 2);
+  MSE_e /= w*h;
+  MSE_r /= w*h;
   std::cout
     << "\nAliev-Panfilov IPU vs. CPU error"
     << "\n--------------------------------"

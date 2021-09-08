@@ -1,0 +1,149 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <getopt.h>
+#include <time.h>
+
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
+
+int main (int argc, char** argv) {
+  // Initialization of variables
+	int i, j, t, opt;
+  int height = 10;
+  int width = 10;
+  int num_iterations = 10;
+  float west, north, east, south;
+  float delta = 5.0e-5;
+  float epsilon = 0.01;
+  float my1 = 0.07;
+  float my2 = 0.3;
+  float k = 8.0;
+  float b = 0.1;
+  float a = 0.1;
+  float dt = 0.001;
+  float dx = 0.001;
+  float d_dx2 = delta/(dx*dx);
+	#ifndef _OPENMP
+		clock_t before, after;
+	#else
+		double before, after;
+	#endif
+		double time_used;
+  
+	// Parsing command-line options
+	while ((opt = getopt(argc, argv, "h:w:t:")) != -1) {
+		switch (opt) {
+			case 'h':
+				height = atoi(optarg);
+				break;
+			case 'w':
+				width = atoi(optarg);
+				break;
+			case 't':
+				num_iterations = atoi(optarg);
+				break;
+			default:
+				fprintf(stderr, "Usage: %s [-h height] [-w width] [-t no. iterations]\n", argv[0]);
+				exit(EXIT_FAILURE);
+		}
+	}
+
+	// Allocate matrices
+	float **tmp; // temporary pointer to perform pointer swaps
+	float **e = (float**) malloc(height*sizeof(float*));
+	float **r = (float**) malloc(height*sizeof(float*));
+	float **e_bar = (float**) malloc(height*sizeof(float*));
+	for (i = 0; i < height; ++i) {
+		e[i] = (float*) malloc(width*sizeof(float));
+		r[i] = (float*) malloc(width*sizeof(float));
+		e_bar[i] = (float*) malloc(width*sizeof(float));
+	}
+
+	// Instantiate random values in matrices
+	#pragma omp parallel for private(j)
+    for (i = 0; i < height; ++i) {
+      for (j = 0; j < width; ++j) {
+        e[i][j] = (j < width/2) ? 0.0 : 1.0; // left half=0, right half=1
+        r[i][j] = (i < height/2) ? 1.0 : 0.0; // top half=1, bottom half=0
+        e_bar[i][j] = e[i][j];
+		}
+	}
+
+	// Start timer
+	#ifndef _OPENMP
+		before = clock();
+	#else
+		before = omp_get_wtime();
+	#endif
+  
+	// Perform computations
+	#pragma omp parallel private(i,j,t)
+	{
+		#ifdef _OPENMP
+		#pragma omp single
+		{
+			printf("Using %d OpenMP threads to parallelize\n", omp_get_num_threads());
+			fflush(NULL);
+		}
+		#endif
+			
+		// Perform Forward-Euler Aliev-Panfilov model
+		for (t = 0; t < num_iterations; ++t) {
+			#pragma omp for
+				for (i = 1; i < height - 1; ++i) {
+					for (j = 1; j < width - 1; ++j) {
+            // Boundary condition
+            west = (j == 0) ? e[i][j+1] : e[i][j-1];
+            east = (j == width - 1) ? e[i][j-1] : e[i][j+1];
+            north = (i == 0) ? e[i+1][j] : e[i-1][j];
+            south = (i == height - 1) ? e[i-1][j] : e[i+1][j];
+            
+            // Computation of new e
+            e_bar[i][j] = e[i][j] + dt*(
+              d_dx2*(-4*e[i][j] + west + east + south + north) - 
+              k*e[i][j]*(e[i][j] - a)*(e[i][j] - 1) - e[i][j]*r[i][j]
+            );
+
+            // Computation of new r
+            r[i][j] = r[i][j] + dt*(-epsilon - my1*r[i][j]/(my2 + e[i][j]))*(r[i][j] + k*e[i][j]*(e[i][j] - b - 1));
+          }
+        }
+			#pragma omp single
+			{
+				// pointer swap
+				tmp = e_bar;
+				e_bar = e;
+				e = tmp;
+			}
+		}
+	}
+	
+	// End timer and evaluate time used
+	#ifndef _OPENMP
+		after = clock();
+		time_used = (float) (after - before) / (float) CLOCKS_PER_SEC;
+	#else
+		after = omp_get_wtime();
+		time_used = after - before;
+	#endif
+
+	// deallocate matrices
+	for (i = 0; i < height; ++i) {
+		free(e[i]);
+		free(e_bar[i]);
+		free(r[i]);
+	}
+	free(e);
+	free(e_bar);
+	free(r);
+
+	// Report parameters and results
+	printf("2D Grid           : %d x %d\n", height, width);
+	printf("Iterations        : %d\n", num_iterations);
+	printf("Time              : %f s\n", time_used);
+	printf("Throughput        : %f GFLOPS\n", 1e-9*num_iterations*height*width*28.0/time_used);
+	printf("Minimal Bandwidth : %f GB/s\n", 1e-9*sizeof(float)*num_iterations*height*width*2.0/time_used);
+
+	return EXIT_SUCCESS;
+}
