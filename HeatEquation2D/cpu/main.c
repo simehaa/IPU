@@ -20,7 +20,7 @@ int main (int argc, char** argv)
 		double time_used;
   
 	// Parsing command-line options
-	while (opt = getopt(argc, argv, "h:w:t:a:") != -1) {
+	while ((opt = getopt(argc, argv, "h:w:t:a:")) != -1) {
 		switch (opt) {
 			case 'h':
 				height = atoi(optarg);
