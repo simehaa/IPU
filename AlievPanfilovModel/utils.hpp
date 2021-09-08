@@ -384,13 +384,24 @@ void reportCpuVsIpu(std::vector<float> cpu_e, std::vector<float> cpu_r,
   std::cout << "\n\n";
 }
 
-void printPerformance(double flops, double load_bw, double store_bw, double total_bw) {
+void printPerformance(double wall_time, utils::Options &options) {
+  double flops_per_element = 28.0;
+  double elements_per_time = (double) options.height * (double) options.width * (double) options.num_iterations / (double) wall_time;
+  double flops = flops_per_element * elements_per_time;
+  double loaded_elems_per_stencil = 6 + 2; // 6 for e, 2 for r
+  double stored_elems_per_stencil = 2; // 1 for e, 1 for r
+  double total_elems_per_stencil = loaded_elems_per_stencil + stored_elems_per_stencil;
+  double bandwidth_base = elements_per_time * sizeof(float);
+  double load_bw = loaded_elems_per_stencil*bandwidth_base;
+  double store_bw = stored_elems_per_stencil*bandwidth_base;
+  double total_bw = total_elems_per_stencil*bandwidth_base;
   std::cout
     << "\nPerformance"
     << "\n-----------"
-    << "\nThroughput = " << flops*1e-9 << " GFLOPS"
-    << "\nLoaded BW  = " << load_bw*1e-9 << " GB/s"
-    << "\nStored BW  = " << store_bw*1e-9 << " GB/s"
-    << "\nTotal BW   = " << total_bw*1e-9 << " GB/s"
+    << "\nTime       = " << wall_time << " s (~ " << (std::size_t) (wall_time*1.33e9) << " clock cycles)"
+    << "\nThroughput = " << flops*1e-12 << " TFLOPS"
+    << "\nLoaded BW  = " << load_bw*1e-12 << " TB/s"
+    << "\nStored BW  = " << store_bw*1e-12 << " TB/s"
+    << "\nTotal BW   = " << total_bw*1e-12 << " TB/s"
     << "\n\n";
 }

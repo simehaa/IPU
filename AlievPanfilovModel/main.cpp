@@ -147,21 +147,21 @@ std::vector<poplar::program::Program> createIpuPrograms(
   auto compute_set_b_to_a = createComputeSet(graph, e_b, e_a, r, options, "Aliev_Panfilov_b_to_a", "AlievPanfilov");
   auto compute_set_a_to_b = createComputeSet(graph, e_a, e_b, r, options, "Aliev_Panfilov_a_to_b", "AlievPanfilov");
   
-  poplar::program::Sequence a_to_b = {
+  auto a_to_b = poplar::program::Sequence({
     poplar::program::Copy(e_a.slice({2,1},{3,w-1}), e_a.slice({0,1},{1,w-1})), // north
     poplar::program::Copy(e_a.slice({h-3,1},{h-2,w-1}), e_a.slice({h-1,1},{h,w-1})), // south
     poplar::program::Copy(e_a.slice({1,2},{h-1,3}), e_a.slice({1,0},{h-1,1})), // west
     poplar::program::Copy(e_a.slice({1,w-3},{h-1,w-2}), e_a.slice({1,w-1},{h-1,w})), // east
     poplar::program::Execute(compute_set_a_to_b)
-  };
+  });
 
-  poplar::program::Sequence b_to_a = {
+  auto b_to_a = poplar::program::Sequence({
     poplar::program::Copy(e_b.slice({2,1},{3,w-1}), e_b.slice({0,1},{1,w-1})), // north
     poplar::program::Copy(e_b.slice({h-3,1},{h-2,w-1}), e_b.slice({h-1,1},{h,w-1})), // south
     poplar::program::Copy(e_b.slice({1,2},{h-1,3}), e_b.slice({1,0},{h-1,1})), // west
     poplar::program::Copy(e_b.slice({1,w-3},{h-1,w-2}), e_b.slice({1,w-1},{h-1,w})), // east
     poplar::program::Execute(compute_set_b_to_a)
-  };
+  });
 
   if (options.num_iterations % 2 == 1) // if num_iterations is odd: add one extra iteration
     execute_this_compute_set.add(a_to_b);
@@ -170,17 +170,17 @@ std::vector<poplar::program::Program> createIpuPrograms(
   execute_this_compute_set.add(
     poplar::program::Repeat(
       options.num_iterations/2,
-      poplar::program::Sequence{b_to_a, a_to_b}
+      poplar::program::Sequence({b_to_a, a_to_b})
     )
   );
   programs.push_back(execute_this_compute_set);
 
   // Program 2: copy final results back to host
   programs.push_back(
-    poplar::program::Sequence{
+    poplar::program::Sequence({
       poplar::program::Copy(e_b.slice({1,1},{h-1,w-1}), device_to_host_e),
       poplar::program::Copy(r, device_to_host_r),
-    }
+    })
   );
 
   return programs;
@@ -240,16 +240,7 @@ int main (int argc, char** argv) {
     // Results
     auto diff = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
     double wall_time = 1e-9*diff.count();
-    double flops_per_element = 28.0;
-    double flops = area * options.num_iterations * flops_per_element / wall_time;
-    double loaded_elems_per_stencil = 6 + 2; // 6 for e, 2 for r
-    double stored_elems_per_stencil = 2; // 1 for e, 1 for r
-    double total_elems_per_stencil = loaded_elems_per_stencil + stored_elems_per_stencil;
-    double bandwidth_base = area * options.num_iterations * sizeof(float) / wall_time;
-    double load_bw = loaded_elems_per_stencil*bandwidth_base;
-    double store_bw = stored_elems_per_stencil*bandwidth_base;
-    double total_bw = total_elems_per_stencil*bandwidth_base;
-    printPerformance(flops, load_bw, store_bw, total_bw);
+    printPerformance(wall_time, options);
 
     if (options.cpu) {
       std::vector<float> cpu_results_e(area);
