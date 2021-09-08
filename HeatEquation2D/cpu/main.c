@@ -9,9 +9,9 @@
 
 int main (int argc, char** argv)
 {
-	int i, j, k, height = 0, width = 0, num_iterations = 100, opt;
+	// Initialization of variables
+	int i, j, k, height = 100, width = 100, num_iterations = 100, opt;
 	float alpha = 0.1;
-
 	#ifndef _OPENMP
 		clock_t before, after;
 	#else
@@ -20,7 +20,7 @@ int main (int argc, char** argv)
 		double time_used;
   
 	// Parsing command-line options
-	while ((opt = getopt(argc, argv, "h:w:t:a:")) != -1) {
+	while (opt = getopt(argc, argv, "h:w:t:a:") != -1) {
 		switch (opt) {
 			case 'h':
 				height = atoi(optarg);
@@ -35,38 +35,40 @@ int main (int argc, char** argv)
 				alpha = atof(optarg);
 				break;
 			default:
-				fprintf(stderr, "Usage: %s [-h height] [-w width] [-t number of iterations] [-a alpha value for heat equation]\n", argv[0]);
+				fprintf(stderr, "Usage: %s [-h height] [-w width] [-t no. iterations] [-a alpha value for heat eq.]\n", argv[0]);
 				exit(EXIT_FAILURE);
 		}
 	}
 
-	// allocate matrices
-	float **a = (float**)malloc(height*sizeof(float*));
-	float **b = (float**)malloc(height*sizeof(float*));
+	// beta reduces the stencil operation to only require 6 flops (instead of 7)
+	float beta = (1 - 4*alpha);
+
+	// Allocate matrices
+	float **tmp; // temporary pointer to perform pointer swaps
+	float **a = (float**) malloc(height*sizeof(float*));
+	float **b = (float**) malloc(height*sizeof(float*));
 	for (i = 0; i < height; ++i) {
-		a[i] = (float*)malloc(width*sizeof(float));
-		b[i] = (float*)malloc(width*sizeof(float));
+		a[i] = (float*) malloc(width*sizeof(float));
+		b[i] = (float*) malloc(width*sizeof(float));
 	}
 
-	// instantiate random values in matrices
+	// Instantiate random values in matrices
 	#pragma omp parallel for private(j)
-    for (i = 0; i < height; i++) {
-      for (j = 0; j < width; j++) {
+    for (i = 0; i < height; ++i) {
+      for (j = 0; j < width; ++j) {
 			a[i][j] = (float) rand() / (float) (RAND_MAX);
 			b[i][j] = a[i][j];
 		}
 	}
 
+	// Start timer
 	#ifndef _OPENMP
 		before = clock();
 	#else
 		before = omp_get_wtime();
 	#endif
   
-	// beta reduces the stencil operation to only require 6 flops (instead of 7)
-	float beta = (1 - 4*alpha);
-	float **tmp; // temporary pointer to perform pointer swaps
-
+	// Perform computations
 	#pragma omp parallel private(i,j,k)
 	{
 		#ifdef _OPENMP
@@ -78,10 +80,10 @@ int main (int argc, char** argv)
 		#endif
 			
 		// Perform heat equation
-		for (k = 0; k < num_iterations; k++) {
+		for (k = 0; k < num_iterations; ++k) {
 			#pragma omp for
-				for (i = 1; i < height - 1; i++)
-					for (j = 1; j < width - 1; j++)
+				for (i = 1; i < height - 1; ++i)
+					for (j = 1; j < width - 1; ++j)
 						b[i][j] = beta*a[i][j] + alpha*(a[i-1][j] + a[i][j-1] + a[i][j+1] + a[i+1][j]);
 			#pragma omp single
 			{
@@ -92,10 +94,11 @@ int main (int argc, char** argv)
 			}
 		}
 	}
-		
+	
+	// End timer and evaluate time used
 	#ifndef _OPENMP
 		after = clock();
-		time_used = 1.0*(after - before)/CLOCKS_PER_SEC;
+		time_used = (float) (after - before) / (float) CLOCKS_PER_SEC;
 	#else
 		after = omp_get_wtime();
 		time_used = after - before;
@@ -110,11 +113,11 @@ int main (int argc, char** argv)
 	free(b);
 
 	// Report parameters and results
-	printf("2D Grid           : %d*%d\n", height, width);
+	printf("2D Grid           : %d x %d\n", height, width);
 	printf("Iterations        : %d\n", num_iterations);
 	printf("alpha             : %g\n", alpha);
 	printf("Time              : %f s\n", time_used);
-	printf("Throughput        : %f GFLOPS\n", 1e-9*num_iterations*(height-2.0)*(width-2.0)*6.0/time_used);
+	printf("Throughput        : %f GFLOPS\n", 1e-9*num_iterations*(height-2)*(width-2)*6/time_used);
 	printf("Minimal Bandwidth : %f GB/s\n", 1e-9*sizeof(float)*num_iterations*height*width*2.0/time_used);
 
 	return EXIT_SUCCESS;
