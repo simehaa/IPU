@@ -13,7 +13,7 @@ poplar::ComputeSet createComputeSet(
   const std::string& vertex) {
 
   auto compute_set = graph.addComputeSet(compute_set_name);
-  unsigned num_workers_per_tile = 1; // graph.getTarget().getNumWorkerContexts();
+  unsigned num_workers_per_tile = graph.getTarget().getNumWorkerContexts();
   unsigned nh = options.nh; // Number of splits in height
   unsigned nw = options.nw; // Number of splits in width
 
@@ -213,27 +213,15 @@ int main (int argc, char** argv) {
     // r: bottom half=0, top half=1
     for (std::size_t x = 0; x < options.height; ++x) {
       for (std::size_t y = 0; y < options.width; ++y) {
-        if (x < options.height/2) {
-          initial_r[y + x*options.width] = 1.0;
-        } else {
-          initial_r[y + x*options.width] = 0.0;
-        }
-        if (y < options.width/2) {
-          initial_e[y + x*options.width] = 0.0;
-        } else {
-          initial_e[y + x*options.width] = 1.0;
-        }
+        initial_r[y + x*options.width] = (x < options.height/2) ? 1.0 : 0.0;
+        initial_e[y + x*options.width] = (y < options.width/2) ? 0.0 : 1.0;
       }
     }
 
     // // Create graph object
     poplar::Graph graph{target};
     graph.addCodelets("codelets.gp");
-
-    // Create programs
     auto programs = createIpuPrograms(graph, options);
-    
-    // Compile graph and programs
     auto exe = poplar::compileGraph(graph, programs);
     
     // Create Engine object

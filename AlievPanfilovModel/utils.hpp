@@ -62,12 +62,12 @@ namespace utils {
     )
     (
       "height", 
-      po::value<unsigned>(&options.height)->default_value(5000),
+      po::value<unsigned>(&options.height)->default_value(6900),
       "Heigth of a custom 2D grid."
     )
     (
       "width",
-      po::value<unsigned>(&options.width)->default_value(5000),
+      po::value<unsigned>(&options.width)->default_value(4800),
       "Width of a custom 2D grid."
     )
     (
