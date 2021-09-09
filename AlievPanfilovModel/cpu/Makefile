@@ -1,4 +1,4 @@
-CC = gcc
+CC = gcc-11
 CFLAGS = -O3 -fopenmp
 TARGETS = main
 OBJECTS = main.o

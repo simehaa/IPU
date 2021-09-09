@@ -62,12 +62,12 @@ namespace utils {
     )
     (
       "height", 
-      po::value<unsigned>(&options.height)->default_value(6900),
+      po::value<unsigned>(&options.height)->default_value(7000),
       "Heigth of a custom 2D grid."
     )
     (
       "width",
-      po::value<unsigned>(&options.width)->default_value(4800),
+      po::value<unsigned>(&options.width)->default_value(7000),
       "Width of a custom 2D grid."
     )
     (
@@ -107,12 +107,12 @@ namespace utils {
     )
     (
       "dt",
-      po::value<float>(&options.dt)->default_value(0.001),
+      po::value<float>(&options.dt)->default_value(0.0001),
       "A constant in the forward Euler Aliev-Panfilov equations."
     )
     (
       "h",
-      po::value<float>(&options.h)->default_value(0.001),
+      po::value<float>(&options.h)->default_value(0.000143),
       "A constant in the forward Euler Aliev-Panfilov equations."
     )
     (
@@ -388,7 +388,7 @@ void printPerformance(double wall_time, utils::Options &options) {
   double flops_per_element = 28.0;
   double elements_per_time = (double) options.height * (double) options.width * (double) options.num_iterations / (double) wall_time;
   double flops = flops_per_element * elements_per_time;
-  double loaded_elems_per_stencil = 6 + 2; // 6 for e, 2 for r
+  double loaded_elems_per_stencil = 6; // 5-point stencil for e + 1 point from r
   double stored_elems_per_stencil = 2; // 1 for e, 1 for r
   double total_elems_per_stencil = loaded_elems_per_stencil + stored_elems_per_stencil;
   double bandwidth_base = elements_per_time * sizeof(float);
@@ -398,10 +398,8 @@ void printPerformance(double wall_time, utils::Options &options) {
   std::cout
     << "\nPerformance"
     << "\n-----------"
-    << "\nTime       = " << wall_time << " s (~ " << (std::size_t) (wall_time*1.33e9) << " clock cycles)"
+    << "\nTime       = " << wall_time << " s"
     << "\nThroughput = " << flops*1e-12 << " TFLOPS"
-    << "\nLoaded BW  = " << load_bw*1e-12 << " TB/s"
-    << "\nStored BW  = " << store_bw*1e-12 << " TB/s"
-    << "\nTotal BW   = " << total_bw*1e-12 << " TB/s"
+    << "\nMinimal BW = " << total_bw*1e-12 << " TB/s"
     << "\n\n";
 }

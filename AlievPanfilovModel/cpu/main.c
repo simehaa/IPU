@@ -10,9 +10,9 @@
 int main (int argc, char** argv) {
   // Initialization of variables
 	int i, j, t, opt;
-  int height = 10;
-  int width = 10;
-  int num_iterations = 10;
+  int height = 7000;
+  int width = 7000;
+  int num_iterations = 1000;
   float west, north, east, south;
   float delta = 5.0e-5;
   float epsilon = 0.01;
@@ -21,8 +21,8 @@ int main (int argc, char** argv) {
   float k = 8.0;
   float b = 0.1;
   float a = 0.1;
-  float dt = 0.001;
-  float dx = 0.001;
+  float dt = 0.0001;
+  float dx = 0.000143;
   float d_dx2 = delta/(dx*dx);
 	#ifndef _OPENMP
 		clock_t before, after;
@@ -111,7 +111,7 @@ int main (int argc, char** argv) {
         }
 			#pragma omp single
 			{
-				// pointer swap
+				// Pointer swap
 				tmp = e_bar;
 				e_bar = e;
 				e = tmp;
@@ -128,7 +128,7 @@ int main (int argc, char** argv) {
 		time_used = after - before;
 	#endif
 
-	// deallocate matrices
+	// Deallocate matrices
 	for (i = 0; i < height; ++i) {
 		free(e[i]);
 		free(e_bar[i]);
@@ -143,7 +143,7 @@ int main (int argc, char** argv) {
 	printf("Iterations        : %d\n", num_iterations);
 	printf("Time              : %f s\n", time_used);
 	printf("Throughput        : %f GFLOPS\n", 1e-9*num_iterations*height*width*28.0/time_used);
-	printf("Minimal Bandwidth : %f GB/s\n", 1e-9*sizeof(float)*num_iterations*height*width*2.0/time_used);
+	printf("Minimal Bandwidth : %f GB/s\n", 1e-9*sizeof(float)*num_iterations*height*width*4.0/time_used);
 
 	return EXIT_SUCCESS;
 }
