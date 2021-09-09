@@ -3,6 +3,9 @@ main
 *.gp
 *.S
 *.pyc
+*.out
+*.err
+*.sbatch
 *__pycache__*
 *figures*
 *data*
