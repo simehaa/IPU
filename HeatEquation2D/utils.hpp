@@ -29,12 +29,11 @@ namespace utils {
     bool cpu;
     // Other arguments which are a consequence of the code or environment
     std::size_t side;
+    std::size_t tiles_per_ipu = 0;
+    std::size_t num_tiles_available = 0;
     std::vector<std::size_t> splits = {0,0};
     std::vector<std::size_t> smallest_slice = {std::numeric_limits<size_t>::max(),1};
     std::vector<std::size_t> largest_slice = {0,0};
-    float memory_available;
-    std::size_t num_tiles_available = 0;
-    std::size_t tiles_per_ipu = 0;
     denoise::Image image; // copy of image (if input jpg image is used)
   };
 
@@ -53,7 +52,7 @@ namespace utils {
     )
     (
       "num-iterations",
-      po::value<unsigned>(&options.num_iterations)->default_value(100),
+      po::value<unsigned>(&options.num_iterations)->default_value(100000),
       "PDE: number of iterations to execute on grid."
     )
     (
@@ -142,11 +141,10 @@ std::size_t area(std::vector<std::size_t> shape) {
 }
 
 void workDivision(utils::Options &options) {
-  /* Function UPDATES options.nh and options.nw
-   * nh and nw will be chosen so that
+  /* Function UPDATES options.splits
    * 1) all tiles will be used, hence options.num_tiles_available must
    *    previously be updated by using the target object
-   * 2) find work division which results in most square patches (sub-grids)
+   * 2) choose the splits that minimizes the halo regions
    */
   std::size_t tile_count = options.tiles_per_ipu;
   std::size_t height = (options.height - 2); // Actual height (boundaries wont be computed)
@@ -209,7 +207,7 @@ void saveImage(utils::Options &options, std::vector<float> results) {
   vectorToImage(options, results);
   std::fstream denoised_pb(options.out_file, std::ios::out | std::ios::trunc | std::ios::binary);
   if (!options.image.SerializeToOstream(&denoised_pb)) {
-    std::cerr << "Failed to write: " << options.out_file << std::endl;
+    std::cerr << "Failed to write: " << options.out_file << "\n";
   } 
 }
 
@@ -295,32 +293,26 @@ void printResults(utils::Options &options, double wall_time) {
   double tflops = flops*1e-12;
   double bandwidth_TB_s = bandwidth*1e-12;
 
-  std::cout 
-    << "\n2D Isotropic Diffusion"
+  std::cout << "2D Isotropic Diffusion"
     << "\n----------------------"
-    << "\n"
-    << "\nParameters"
-    << "\n----------"
     << "\nVertex             = " << options.vertex
     << "\nNo. IPUs           = " << options.num_ipus
     << "\nNo. Tiles          = " << options.num_tiles_available
     << "\nTotal Grid         = " << options.height << "*" << options.width << " = "
-                                 << options.height*options.width*1e-6 << " million elements"
+                                  << options.height*options.width*1e-6 << " million elements"
     << "\nSmallest tile grid = " << options.smallest_slice[0] << "*" << options.smallest_slice[1]
     << "\nLargest tile grid  = " << options.largest_slice[0] << "*" << options.largest_slice[1]
     << "\nalpha              = " << options.alpha
     << "\nNo. Iterations     = " << options.num_iterations
     << "\n"
-    << "\nPerformance"
-    << "\n-----------"
+    << "\nLaTeX Tabular Row"
+    << "\n-----------------"
     << "\nNo. IPUs & Grid & No. Iterations & Time [s] & Throughput [TFLOPS] & Minimum Bandwidth [TB/s] \\\\\n" 
     << options.num_ipus << " & "
     << "$" << options.height << "\\times " << options.width << "$ & "  
-    << options.num_iterations << " & " 
-    << wall_time << " & " 
-    << tflops << " & " 
-    << bandwidth_TB_s << " \\\\"
+    << options.num_iterations << " & " << std::fixed
+    << std::setprecision(2) << wall_time << " & " 
+    << std::setprecision(2) << tflops << " & " 
+    << std::setprecision(2) << bandwidth_TB_s << " \\\\"
     << "\n";
-    
-  std::cout << "\n";
 }

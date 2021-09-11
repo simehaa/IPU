@@ -28,18 +28,18 @@ namespace utils {
     unsigned num_ipus;
     unsigned num_iterations;
     float alpha;
-    bool cpu;
     std::size_t height;
     std::size_t width;
     std::size_t depth;
     std::string vertex;
+    bool cpu;
     // Not command line arguments
     std::size_t side;
+    std::size_t tiles_per_ipu = 0;
+    std::size_t num_tiles_available = 0;
     std::vector<std::size_t> splits = {0,0,0};
     std::vector<std::size_t> smallest_slice = {std::numeric_limits<size_t>::max(),1,1};
     std::vector<std::size_t> largest_slice = {0,0,0};
-    std::size_t num_tiles_available = 0;
-    std::size_t tiles_per_ipu = 0;
   };
 
   inline
@@ -56,7 +56,7 @@ namespace utils {
     )
     (
       "num-iterations",
-      po::value<unsigned>(&options.num_iterations)->default_value(1000),
+      po::value<unsigned>(&options.num_iterations)->default_value(100000),
       "PDE: number of iterations to execute on grid."
     )
     (
@@ -151,9 +151,11 @@ std::size_t volume(std::vector<std::size_t> shape) {
 }
 
 void workDivision(utils::Options &options) {
-  /* Function UPDATES options.nh, options.nw, and options.nd
-   * The average resulting slice will have shape [height/nh, width/nw, depth/nd']
-   * This function chooses nh, nw, nd, so that the surface area is minimized.
+  /* Function UPDATES options.splits
+   * 1) all tiles will be used, hence options.num_tiles_available must
+   *    previously be updated by using the target object
+   * 2) the average resulting slice will have shape [height/nh, width/nw, depth/nd'] and
+   *    this function chooses nh, nw, nd, so that the surface area is minimized.
    */
   float smallest_surface_area = std::numeric_limits<float>::max();
   std::size_t height = (options.height - 2);
@@ -281,12 +283,8 @@ void printResults(utils::Options &options, double wall_time) {
   double tflops = flops*1e-12;
   double bandwidth_TB_s = bandwidth*1e-12;
 
-  std::cout 
-    << "\n3D Isotropic Diffusion"
+  std::cout << "3D Isotropic Diffusion"
     << "\n----------------------"
-    << "\n"
-    << "\nParameters"
-    << "\n----------"
     << "\nVertex             = " << options.vertex
     << "\nNo. IPUs           = " << options.num_ipus
     << "\nNo. Tiles          = " << options.num_tiles_available
@@ -297,15 +295,15 @@ void printResults(utils::Options &options, double wall_time) {
     << "\nalpha              = " << options.alpha
     << "\nNo. Iterations     = " << options.num_iterations
     << "\n"
-    << "\nPerformance"
-    << "\n-----------"
+    << "\nLaTeX Tabular Row"
+    << "\n-----------------"
     << "\nNo. IPUs & Grid & No. Iterations & Time [s] & Throughput [TFLOPS] & Minimum Bandwidth [TB/s] \\\\\n" 
     << options.num_ipus << " & "
     << "$" << options.height << "\\times " << options.width << "\\times " << options.depth << "$ & " 
-    << options.num_iterations << " & " 
-    << wall_time << " & " 
-    << tflops << " & " 
-    << bandwidth_TB_s << " \\\\"
+    << options.num_iterations << " & " << std::fixed
+    << std::setprecision(2) << wall_time << " & " 
+    << std::setprecision(2) << tflops << " & " 
+    << std::setprecision(2) << bandwidth_TB_s << " \\\\"
     << "\n";
 }
 
