@@ -321,7 +321,7 @@ void printResults(utils::Options &options, double wall_time) {
     << "\n-----------"
     << "\nNo. IPUs & Grid & No. Iterations & Time [s] & Throughput [TFLOPS] & Minimum Bandwidth [TB/s] \\\\\n" 
     << options.num_ipus << " & "
-    << " $" << options.height << "\\times " << options.width << "$ & "  
+    << "$" << options.height << "\\times " << options.width << "$ & "  
     << options.num_iterations << " & " 
     << wall_time << " & " 
     << tflops << " & " 
