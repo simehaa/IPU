@@ -36,11 +36,7 @@ namespace utils {
     // Not command line arguments
     std::size_t side;
     std::vector<std::size_t> splits = {0,0,0};
-    std::vector<std::size_t> smallest_slice = {
-      std::numeric_limits<size_t>::max(),
-      std::numeric_limits<size_t>::max(),
-      std::numeric_limits<size_t>::max()
-    };
+    std::vector<std::size_t> smallest_slice = {std::numeric_limits<size_t>::max(),1,1};
     std::vector<std::size_t> largest_slice = {0,0,0};
     std::size_t num_tiles_available = 0;
     std::size_t tiles_per_ipu = 0;
@@ -161,9 +157,9 @@ void workDivision(utils::Options &options) {
    * This function chooses nh, nw, nd, so that the surface area is minimized.
    */
   float smallest_surface_area = std::numeric_limits<float>::max();
-  std::size_t height = options.height;
-  std::size_t width = options.width;
-  std::size_t depth = options.depth / options.num_ipus;
+  std::size_t height = (options.height - 2);
+  std::size_t width = (options.width - 2);
+  std::size_t depth = (options.depth - 2) / options.num_ipus;
   std::size_t tile_count = options.num_tiles_available / options.num_ipus;
   for (std::size_t i = 1; i <= tile_count; ++i) {
     if (tile_count % i == 0) { // then i is a factor
@@ -257,9 +253,9 @@ void printMeanSquaredError(
    * Compute the MSE, __only the inner elements__, of two 3D grids
    */
   double squared_error = 0, diff;
-  unsigned h = options.height;
-  unsigned w = options.width;
-  unsigned d = options.depth;
+  std::size_t h = options.height;
+  std::size_t w = options.width;
+  std::size_t d = options.depth;
   for (std::size_t x = 1; x < h - 1; ++x) {
     for (std::size_t y = 1; y < w - 1; ++y) { 
       for (std::size_t z = 1; z < d - 1; ++z) {
@@ -268,7 +264,7 @@ void printMeanSquaredError(
       }
     }
   }
-  double mean_squared_error = squared_error / double((h-2)*(w-2)*(d-2));
+  double mean_squared_error = squared_error / (double) ((h-2)*(w-2)*(d-2));
 
   std::cout << "\nMean Squared Error (IPU vs. CPU) = " << mean_squared_error;
   if (mean_squared_error == double(0.0)) 
@@ -296,7 +292,7 @@ void printResults(utils::Options &options, double wall_time) {
     << "\nNo. IPUs           = " << options.num_ipus
     << "\nNo. Tiles          = " << options.num_tiles_available
     << "\nTotal Grid         = " << options.height << "*" << options.width << "*" << options.depth << " = "
-                                << options.height*options.width*options.depth*1e-6 << " million elements"
+                                 << options.height*options.width*options.depth*1e-6 << " million elements"
     << "\nSmallest Sub-grid  = " << options.smallest_slice[0] << "*" << options.smallest_slice[1] << "*" << options.smallest_slice[2] 
     << "\nLargest Sub-grid   = " << options.largest_slice[0] << "*" << options.largest_slice[1] << "*" << options.largest_slice[2] 
     << "\nalpha              = " << options.alpha

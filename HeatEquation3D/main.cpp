@@ -50,13 +50,18 @@ poplar::ComputeSet createComputeSet(
       for (std::size_t y = 0; y < nw; ++y) {
         for (std::size_t z = 0; z < nd; ++z) {
           unsigned tile_id = index(x, y, z, nw, nd) + ipu*options.tiles_per_ipu;
-
           unsigned tile_x = block_low(x, nh, options.height-2) + 1;
           unsigned tile_y = block_low(y, nw, options.width-2) + 1;
-          unsigned z_low = block_low(z, nd, inter_depth-2) + 1;
           unsigned tile_height = block_size(x, nh, options.height-2);
           unsigned tile_width = block_size(y, nw, options.width-2);
+          unsigned z_low = block_low(z, nd, inter_depth-2) + 1;
           unsigned z_high = block_high(z, nd, inter_depth-2) + 1;
+
+          std::vector<std::size_t> shape = {tile_height, tile_width, z_high - z_low};
+          if (volume(shape) < volume(options.smallest_slice))
+            options.smallest_slice = shape;
+          if (volume(shape) > volume(options.largest_slice)) 
+            options.largest_slice = shape;
 
           for (std::size_t worker_xi = 0; worker_xi < nwh; ++worker_xi) {
             for (std::size_t worker_yi = 0; worker_yi < nww; ++worker_yi) {
@@ -78,22 +83,15 @@ poplar::ComputeSet createComputeSet(
                 {x_high, y_high, z_high}
               );
 
-              std::vector<std::size_t> shape = out_slice.shape(); // shape of the volume where stencils are applied to
-
               // Assign vertex to graph
               auto v = graph.addVertex(compute_set, options.vertex);
               graph.connect(v["in"], in_slice.flatten(0,2));
               graph.connect(v["out"], out_slice.flatten(0,2));
-              graph.setInitialValue(v["worker_height"], shape[0]);
-              graph.setInitialValue(v["worker_width"], shape[1]);
-              graph.setInitialValue(v["worker_depth"], shape[2]);
+              graph.setInitialValue(v["worker_height"], x_high - x_low);
+              graph.setInitialValue(v["worker_width"], y_high - y_low);
+              graph.setInitialValue(v["worker_depth"], z_high - z_low);
               graph.setInitialValue(v["alpha"], options.alpha);
               graph.setTileMapping(v, tile_id);
-
-              if (volume(shape) < volume(options.smallest_slice))
-                options.smallest_slice = shape;
-              if (volume(shape) > volume(options.largest_slice)) 
-                options.largest_slice = shape;
             }
           }
         }
