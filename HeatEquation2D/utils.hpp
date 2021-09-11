@@ -19,40 +19,24 @@ namespace utils {
   struct Options {
     // Command line arguments (with default values)
     unsigned num_ipus;
-    unsigned height;
-    unsigned width;
     unsigned num_iterations;
     float alpha;
-    bool cpu;
-    bool random_tiles;
+    std::size_t height;
+    std::size_t width;
+    std::string vertex;
     std::string in_file;
     std::string out_file;
+    bool cpu;
     // Other arguments which are a consequence of the code or environment
     std::string architecture; // Assigned when creating device
-    unsigned num_tiles = 0;
-    unsigned nh = 0;
-    unsigned nw = 0;
-    unsigned num_tiles_available = 0;
-    unsigned largest_tile_height = 0;
-    unsigned largest_tile_width = 0;
-    unsigned largest_tile_area = 0;
-    unsigned smallest_tile_height = UINT_MAX; // = 4,294,967,295 (should be safe)
-    unsigned smallest_tile_width = UINT_MAX;
-    unsigned smallest_tile_area = UINT_MAX;
-    std::vector<int> random_perm;
+    std::vector<std::size_t> splits = {0,0};
+    std::vector<std::size_t> smallest_slice = {std::numeric_limits<size_t>::max(),1};
+    std::vector<std::size_t> largest_slice = {0,0};
     float memory_available;
-    bool first_compute_set = true;
+    std::size_t num_tiles_available = 0;
+    std::size_t tiles_per_ipu = 0;
     denoise::Image image; // copy of image (if input jpg image is used)
   };
-
-  std::vector<std::string> getVertices() {
-    // Names of vertices to include in computation
-    std::vector<std::string> vertices = {
-      "HeatEquationSimple",
-      "HeatEquationOptimized"
-    };
-    return vertices;
-  }
 
   inline
   Options parseOptions(int argc, char** argv) {
@@ -68,19 +52,19 @@ namespace utils {
       "Number of IPUs to use."
     )
     (
+      "num-iterations",
+      po::value<unsigned>(&options.num_iterations)->default_value(100),
+      "PDE: number of iterations to execute on grid."
+    )
+    (
       "height", 
-      po::value<unsigned>(&options.height)->default_value(46*204+2),
+      po::value<std::size_t>(&options.height)->default_value(8000),
       "Heigth of a custom 2D grid. Will be overwritten if --in-file is used."
     )
     (
       "width",
-      po::value<unsigned>(&options.width)->default_value(32*204+2),
+      po::value<std::size_t>(&options.width)->default_value(8000),
       "Width of a custom 2D grid. Will be overwritten if --in-file is used."
-    )
-    (
-      "num-iterations",
-      po::value<unsigned>(&options.num_iterations)->default_value(100),
-      "PDE: number of iterations to execute on grid."
     )
     (
       "alpha",
@@ -93,9 +77,9 @@ namespace utils {
       "Also perform CPU execution to control results from IPU."
     )
     (
-      "random-tiles",
-      po::bool_switch(&options.random_tiles)->default_value(false),
-      "Assign tile mappings randomly among the tiles."
+      "vertex",
+      po::value<std::string>(&options.vertex)->default_value("HeatEquationOptimized"),
+      "Name of vertex (from codelets.cpp) to use for the computation."
     )
     (
       "in-file",
@@ -152,6 +136,11 @@ inline static unsigned block_size(unsigned id, unsigned p, unsigned n) {
   return block_high(id, p, n) - block_low(id, p, n); 
 }
 
+std::size_t area(std::vector<std::size_t> shape) {
+  // return area of shape vector (2D)
+  return shape[0]*shape[1];
+}
+
 void workDivision(utils::Options &options) {
   /* Function UPDATES options.nh and options.nw
    * nh and nw will be chosen so that
@@ -159,29 +148,22 @@ void workDivision(utils::Options &options) {
    *    previously be updated by using the target object
    * 2) find work division which results in most square patches (sub-grids)
    */
-  unsigned tile_count = options.num_tiles_available;
-  unsigned H = options.height - 2; // Actual height (boundaries wont be computed)
-  unsigned W = options.width - 2; // Actual width
-  float best_patch_ratio = std::numeric_limits<float>::infinity();
-  bool height_dominant = (H >= W);
+  std::size_t tile_count = options.tiles_per_ipu;
+  std::size_t height = (options.height - 2); // Actual height (boundaries wont be computed)
+  std::size_t width = (options.width - 2) / options.num_ipus; // Actual width
+  float smallest_halo_region = std::numeric_limits<float>::infinity();
 
   // Try all unique combinations where i*j = tile_count
-  for (unsigned i = 1; i*i <= tile_count; ++i) {
-    if ((tile_count % i) == 0) {
-      unsigned j = tile_count / i; // j >= i
-      unsigned nh = height_dominant ? j : i;
-      unsigned nw = height_dominant ? i : j;
-
-      unsigned h = float(H) / nh;
-      unsigned w = float(W) / nw;
-      // largest side length / smallest side length
-      // this will result in a ratio >= 1, where the ratio
-      // which is closest to 1, has the most square patches (1=perfect square)
-      float patch_ratio = (h > w) ? float(h)/w : float(w)/h;
-      if (patch_ratio < best_patch_ratio) {
-        best_patch_ratio = patch_ratio;
-        options.nh = nh;
-        options.nw = nw;
+  for (std::size_t i = 1; i <= tile_count; ++i) {
+    if ((tile_count % i) == 0) { // then i is a factor
+      std::size_t j = tile_count / i; // and j must be the other factor
+      std::size_t slice_height = height / i;
+      std::size_t slice_width = width / j;
+      std::size_t halo_region = 2.0*(slice_height + slice_width) - 4;
+      if (halo_region <= smallest_halo_region) {
+        smallest_halo_region = halo_region;
+        options.splits[0] = i;
+        options.splits[1] = j;
       }
     }
   }
@@ -279,35 +261,39 @@ std::vector<float> heatEquationCpu(
   return a;
 }
 
-double meanSquaredErrorInnerElements(
+void printMeanSquaredError(
   std::vector<float> a, 
   std::vector<float> b, 
   utils::Options &options) {
   /*
    * Compute the MSE on only the inner elements of two 2D grids
    */
-  double squared_error = 0;
-  double diff;
-  unsigned h = options.height;
-  unsigned w = options.width;
+  double squared_error = 0, diff;
+  std::size_t h = options.height;
+  std::size_t w = options.width;
   for (std::size_t x = 1; x < h - 1; ++x) {
     for (std::size_t y = 1; y < w - 1; ++y) { 
       diff = double(a[index(x,y,w)] - b[index(x,y,w)]);
       squared_error += diff*diff;
     }
   }
-  double inner_area = double((h-2)*(w-2));
-  double mean_squared_error = squared_error / inner_area;
-  return mean_squared_error;
+  double mean_squared_error = squared_error / (double) ((h-2)*(w-2));
+  
+  std::cout << "\nMean Squared Error (IPU vs. CPU) = " << mean_squared_error;
+  if (mean_squared_error == double(0.0)) 
+    std::cout << " (exactly)";
+  std::cout << "\n";
 }
 
-void printGeneralInfo(utils::Options &options) {
+void printResults(utils::Options &options, double wall_time) {
 
   // Calculate metrics
-  double total_area = options.height * options.width;
-  double memory_used = total_area * sizeof(float) * 2;
-  double memory_fraction = total_area * sizeof(float) * 2 / float(options.memory_available);
-  double tile_balance = 100 * float(options.smallest_tile_area) / float(options.largest_tile_area);
+  double inner_area = (double) (options.height - 2) * (double) (options.width - 2);
+  double flops_per_element = 6.0;
+  double flops = inner_area * options.num_iterations * flops_per_element / wall_time;
+  double bandwidth = 6 * inner_area * options.num_iterations * sizeof(float) / wall_time;
+  double tflops = flops*1e-12;
+  double bandwidth_TB_s = bandwidth*1e-12;
 
   std::cout 
     << "\n2D Isotropic Diffusion"
@@ -315,66 +301,26 @@ void printGeneralInfo(utils::Options &options) {
     << "\n"
     << "\nParameters"
     << "\n----------"
-    << "\nIPU Architecture    = " << options.architecture
-    << "\nTotal Grid          = " << options.height << "*" << options.width << " = "
-                                  << total_area*1e-6 << " million elements"
-    << "\nLargest Sub-grid    = " << options.largest_tile_height << "*" << options.largest_tile_width << " = " 
-                                  << options.largest_tile_area << " elements"
-    << "\nSmallest Sub-grid   = " << options.smallest_tile_height << "*" << options.smallest_tile_width << " = " 
-                                  << options.smallest_tile_area << " elements"
-    << "\nTile Balance        = " << tile_balance << " %"
-    << "\nMemory (2x tensors) = " << memory_used * 1e-6 << " MB (" << memory_fraction * 100 << " \% of " << options.memory_available * 1e-6 << " MB)"
-    << "\nAlpha               = " << options.alpha
-    << "\nNum. Iterations     = " << options.num_iterations
-    << "\nNum. IPUs Used      = " << options.num_ipus
-    << "\nNum. Tiles Used     = " << options.num_tiles << " (" << options.num_tiles_available << " available)"
-    << "\nWork Division       = " << options.nh << "*" << options.nw
-    << "\nRandom Tiles        = " << options.random_tiles;
+    << "\nVertex             = " << options.vertex
+    << "\nNo. IPUs           = " << options.num_ipus
+    << "\nNo. Tiles          = " << options.num_tiles_available
+    << "\nTotal Grid         = " << options.height << "*" << options.width << " = "
+                                 << options.height*options.width*1e-6 << " million elements"
+    << "\nSmallest tile grid = " << options.smallest_slice[0] << "*" << options.smallest_slice[1]
+    << "\nLargest tile grid  = " << options.largest_slice[0] << "*" << options.largest_slice[1]
+    << "\nalpha              = " << options.alpha
+    << "\nNo. Iterations     = " << options.num_iterations
+    << "\n"
+    << "\nPerformance"
+    << "\n-----------"
+    << "\nNo. IPUs & Grid & No. Iterations & Time [s] & Throughput [TFLOPS] & Minimum Bandwidth [TB/s] \\\\\n" 
+    << options.num_ipus << " & "
+    << "$" << options.height << "\\times " << options.width << "$ & "  
+    << options.num_iterations << " & " 
+    << wall_time << " & " 
+    << tflops << " & " 
+    << bandwidth_TB_s << " \\\\"
+    << "\n";
     
   std::cout << "\n";
-}
-
-void printMeanSquaredError(
-  const std::vector<std::string> vertices, 
-  const std::vector<double> MSE) {
-  /* Print MSE of IPU results vs. CPU results */
-  if (vertices.size() > 0 && MSE.size() > 0 && vertices.size() == MSE.size()) {
-    std::cout 
-      << "\nMean Squared Error (IPU vs. CPU)"
-      << "\n--------------------------------";
-    // Add rows (one value per vertex)
-    for (std::size_t i = 0; i < MSE.size(); ++i) {
-      std::cout << "\n" << vertices[i] << " = " << MSE[i];
-      if (MSE[i] == double(0.0)) 
-        std::cout << " (exactly)";
-    }
-    std::cout << "\n";
-  }
-}
-
-void printLatexTabular(
-    std::vector<std::string> vertices,
-    std::vector<double> TFLOPS,
-    std::vector<double> bandwidth_TB_S) {
-
-  // LaTeX tabular print
-  std::cout
-    << "\nLaTeX Tabular" 
-    << "\n-------------"
-    << "\n\\begin{tabular}{lllll}"
-    << "\n\\toprule"
-    << "\nVertex & TFLOPS & Store BW & Load BW & Total BW \\\\\\midrule\n" << std::fixed;
-
-  // Add rows with data
-  for (std::size_t i = 0; i < vertices.size(); ++i) {
-    std::cout << "\\mintinline{c++}{" << vertices[i] << "}"
-      << " & " << std::setprecision(3) << TFLOPS[i] 
-      << " & " << std::setprecision(3) << bandwidth_TB_S[i] << " TB/s"
-      << " & " << std::setprecision(3) << 5*bandwidth_TB_S[i] << " TB/s"
-      << " & " << std::setprecision(3) << 6*bandwidth_TB_S[i] << " TB/s"
-      << " \\\\\n";
-  }
-  
-  // End of tabular
-  std::cout << "\\bottomrule\n\\end{tabular}\n"; 
 }

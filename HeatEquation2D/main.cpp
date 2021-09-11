@@ -15,8 +15,7 @@ poplar::ComputeSet createComputeSet(
   poplar::Tensor &in,
   poplar::Tensor &out,
   utils::Options &options,
-  const std::string& compute_set_name,
-  const std::string& vertex) {
+  const std::string& compute_set_name) {
   /*
    * Compute Set which performs the isotropic diffusion 
    * (one iteration of sliding the stencil over the inner elements)
@@ -24,66 +23,67 @@ poplar::ComputeSet createComputeSet(
    */
   auto compute_set = graph.addComputeSet(compute_set_name);
   unsigned num_workers_per_tile = graph.getTarget().getNumWorkerContexts();
-  unsigned nh = options.nh; // Number of splits in height
-  unsigned nw = options.nw; // Number of splits in width
+  unsigned nh = options.splits[0]; // Number of splits in height
+  unsigned nw = options.splits[1]; // Number of splits in width
 
   // this double loop essentially iterated over the number of tiles (see tile_id below)
-  for (std::size_t x = 0; x < nh; ++x) {
-    for (std::size_t y = 0; y < nw; ++y) {
+  for (std::size_t ipu = 0; ipu < options.num_ipus; ++ipu) {
 
-      // tile_id should run from 0, 1, ..., nh*nw
-      unsigned tile_id = index(x, y, nw);
+     // Ensure overlapping grids among the IPUs
+    std::size_t offset_right = 2;
+    auto ipu_in_slice = in.slice(
+      {0, block_low(ipu, options.num_ipus, options.width-2)},
+      {options.height, block_high(ipu, options.num_ipus, options.width-2) + offset_right}
+    );
+    auto ipu_out_slice = out.slice(
+      {0, block_low(ipu, options.num_ipus, options.width-2)},
+      {options.height, block_high(ipu, options.num_ipus, options.width-2) + offset_right}
+    );
+    std::size_t inter_width = ipu_in_slice.shape()[1];
 
-      // Start indices
-      unsigned tile_x = block_low(x, nh, options.height-2);
-      unsigned tile_y = block_low(y, nw, options.width-2);
+    for (std::size_t x = 0; x < nh; ++x) {
+      for (std::size_t y = 0; y < nw; ++y) {
+        unsigned tile_id = index(x, y, nw) + ipu*options.tiles_per_ipu;
+        unsigned tile_x = block_low(x, nh, options.height-2) + 1;
+        unsigned tile_height = block_size(x, nh, options.height-2);
+        unsigned y_low = block_low(y, nw, inter_width-2) + 1;
+        unsigned y_high = block_high(y, nw, inter_width-2) + 1;
 
-      // Tile sub-grid sizes which include overlap
-      unsigned tile_height = block_size(x, nh, options.height-2);
-      unsigned tile_width = block_size(y, nw, options.width-2);
-      unsigned tile_area = tile_height * tile_width;
+        std::vector<std::size_t> shape = {tile_height, y_high - y_low};
+        if (area(shape) < area(options.smallest_slice))
+          options.smallest_slice = shape;
+        if (area(shape) > area(options.largest_slice))
+          options.largest_slice = shape;
 
-      // Finding the largest subdivision in each respective dimension
-      if (tile_area > options.largest_tile_area) {
-        options.largest_tile_height = tile_height;
-        options.largest_tile_width = tile_width;
-        options.largest_tile_area = tile_area;
-      }
+        for (std::size_t worker_i = 0; worker_i < num_workers_per_tile; ++worker_i) {
+          
+          // Dividing tile work among workers by splitting up grid further in height (x) dimension
+          unsigned x_low = tile_x + block_low(worker_i, num_workers_per_tile, tile_height);
+          unsigned x_high = tile_x + block_high(worker_i, num_workers_per_tile, tile_height);
+          
+          // NOTE: include overlap for "in_slice"
+          auto in_slice = ipu_in_slice.slice(
+            {x_low-1, y_low-1},
+            {x_high+1, y_high+1}
+          );
 
-      // Finding the smallest subdivision in each respective dimension
-      if (tile_area < options.smallest_tile_area) {
-        options.smallest_tile_height = tile_height;
-        options.smallest_tile_width = tile_width;
-        options.smallest_tile_area = tile_area;
-      }
+          auto out_slice = ipu_out_slice.slice(
+            {x_low, y_low},
+            {x_high, y_high}
+          );
 
-      if (tile_area > 0 && options.first_compute_set) // ONLY count this once (hence the first_compute_set check)
-        options.num_tiles++;        
-
-      for (std::size_t worker_i = 0; worker_i < num_workers_per_tile; ++worker_i) {
-        
-        // Dividing tile work among workers by splitting up grid further in height (x) dimension
-        unsigned x_low = tile_x + block_low(worker_i, num_workers_per_tile, tile_height) + 1;
-        unsigned worker_height = block_size(worker_i, num_workers_per_tile, tile_height);
-        unsigned x_high = x_low + worker_height;
-        
-        unsigned y_low = tile_y + 1;
-        unsigned worker_width = tile_width;
-        unsigned y_high = y_low + worker_width;
-
-        // Assign vertex to graph
-        auto v = graph.addVertex(compute_set, vertex);
-        graph.connect(v["in"], in.slice({x_low-1, y_low-1}, {x_high+1, y_high+1}));
-        graph.connect(v["out"], out.slice({x_low, y_low}, {x_high, y_high}));
-        graph.setInitialValue(v["worker_height"], worker_height);
-        graph.setInitialValue(v["worker_width"], worker_width);
-        graph.setInitialValue(v["alpha"], options.alpha);
-        graph.setTileMapping(v, options.random_perm[tile_id]);
+          // Assign vertex to graph
+          auto v = graph.addVertex(compute_set, options.vertex);
+          graph.connect(v["in"], in_slice);
+          graph.connect(v["out"], out_slice);
+          graph.setInitialValue(v["worker_height"], x_high - x_low);
+          graph.setInitialValue(v["worker_width"], y_high - y_low);
+          graph.setInitialValue(v["alpha"], options.alpha);
+          graph.setTileMapping(v, tile_id);
+        }
       }
     }
   }
-  options.first_compute_set = false; // Compute set is used to e.g. keep track of sub-grid
-  // area and side-lengths, but thi is only done when first_compute_set = true.
 
   return compute_set;
 }
@@ -94,10 +94,10 @@ std::vector<poplar::program::Program> createIpuPrograms(
   utils::Options &options) { 
   /*
    * This function defines a vector of IPU programs which are set to execute
-   * the diffusion equation (PDE) on a three dimensional grid.
+   * the diffusion equation (PDE) on a two dimensional grid.
    *
    * The returned vector consist of three Poplar programs:
-   * 0: Stream the 3D grid to device - both graph tensors "a" and "b" will get these values
+   * 0: Stream the 2D grid to device - both graph tensors "a" and "b" will get these values
    * 1: Execute diffusion eq. back and forth between "a" and "b"
    * 2: Stream the results back from device (will always be "b")
    */
@@ -107,39 +107,51 @@ std::vector<poplar::program::Program> createIpuPrograms(
   auto b = graph.addVariable(poplar::FLOAT, {options.height, options.width}, "b");
 
   // Tile mappings
-  int nh = options.nh; // Number of splits in height
-  int nw = options.nw; // Number of splits in width
+  for (std::size_t ipu = 0; ipu < options.num_ipus; ++ipu) {
 
-  for (std::size_t x = 0; x < nh; ++x) {
-    for (std::size_t y = 0; y < nw; ++y) {
+    std::size_t offset_left = (ipu == 0) ? 0 : 1;
+    std::size_t offset_right = (ipu == options.num_ipus - 1) ? 2 : 1;
+    auto ipu_slice = a.slice(
+      {
+        0, 
+        block_low(ipu, options.num_ipus, options.width-2) + offset_left
+      },
+      {
+        options.height, 
+        block_high(ipu, options.num_ipus, options.width-2) + offset_right
+      }
+    );
+    std::size_t inter_width = ipu_slice.shape()[1];
 
-      // tile_id runs from 0, 1, 2, ..., nh*nw
-      unsigned tile_id = index(x, y, nw);
+    for (std::size_t tile_x = 0; tile_x < options.splits[0]; ++tile_x) {
+      for (std::size_t tile_y = 0; tile_y < options.splits[1]; ++tile_y) {
 
-      // Evaluate offsets in all dimensions (avoid overlap at edges)
-      int offset_top = (x == 0) ? 0 : 1;
-      int offset_left = (y == 0) ? 0 : 1;
-      int offset_bottom = (x == nh - 1) ? 2 : 1;
-      int offset_right = (y == nw - 1) ? 2 : 1;
+        // tile_id runs from 0, 1, 2, ..., nh*nw
+        unsigned tile_id = index(tile_x, tile_y, options.splits[1]) + ipu*options.tiles_per_ipu;
 
-      // map a slice to a tile
-      graph.setTileMapping(
-        a.slice(
+        // Evaluate offsets in all dimensions (avoid overlap at edges)
+        int offset_top = (tile_x == 0) ? 0 : 1;
+        int inter_offset_left = (tile_y == 0) ? 0 : 1;
+        int offset_bottom = (tile_x == options.splits[0] - 1) ? 2 : 1;
+        int inter_offset_right = (tile_y == options.splits[1] - 1) ? 2 : 1;
+
+        // map a slice to a tile
+        auto tile_slice = ipu_slice.slice(
           {
-            block_low(x, nh, options.height-2) + offset_top, 
-            block_low(y, nw, options.width-2) + offset_left
+            block_low(tile_x, options.splits[0], options.height-2) + offset_top, 
+            block_low(tile_y, options.splits[1], inter_width-2) + inter_offset_left
           },
           {
-            block_high(x, nh, options.height-2) + offset_bottom, 
-            block_high(y, nw, options.width-2) + offset_right
+            block_high(tile_x, options.splits[0], options.height-2) + offset_bottom, 
+            block_high(tile_y, options.splits[1], inter_width-2) + inter_offset_right
           }
-        ),
-        options.random_perm[tile_id]
-      );
+        );
+
+        graph.setTileMapping(tile_slice, tile_id);
+      }
     }
   }
   
-
   // Apply the tile mapping of "a" to be the same for "b"
   const auto& tile_mapping = graph.getTileMapping(a);
   graph.setTileMapping(b, tile_mapping);
@@ -159,31 +171,28 @@ std::vector<poplar::program::Program> createIpuPrograms(
     }
   );
 
-  auto vertices = utils::getVertices();
-  for (auto vertex : vertices) {
-    // Create compute sets
-    auto compute_set_b_to_a = createComputeSet(graph, b, a, options, "HeatEquation_b_to_a", vertex);
-    auto compute_set_a_to_b = createComputeSet(graph, a, b, options, "HeatEquation_a_to_b", vertex);
-    poplar::program::Sequence execute_this_compute_set;
+  // Create compute sets
+  auto compute_set_b_to_a = createComputeSet(graph, b, a, options, "HeatEquation_b_to_a");
+  auto compute_set_a_to_b = createComputeSet(graph, a, b, options, "HeatEquation_a_to_b");
+  poplar::program::Sequence execute_this_compute_set;
 
-    if (options.num_iterations % 2 == 1) { // if num_iterations is odd: add one extra iteration
-      execute_this_compute_set.add(poplar::program::Execute(compute_set_a_to_b));
-    }
-
-    // add iterations 
-    execute_this_compute_set.add(
-      poplar::program::Repeat(
-        options.num_iterations/2,
-        poplar::program::Sequence{
-          poplar::program::Execute(compute_set_b_to_a),
-          poplar::program::Execute(compute_set_a_to_b)
-        }
-      )
-    );
-
-    programs.push_back(execute_this_compute_set);
-    programs.push_back(poplar::program::Copy(b, device_to_host));
+  if (options.num_iterations % 2 == 1) { // if num_iterations is odd: add one extra iteration
+    execute_this_compute_set.add(poplar::program::Execute(compute_set_a_to_b));
   }
+
+  // add iterations 
+  execute_this_compute_set.add(
+    poplar::program::Repeat(
+      options.num_iterations/2,
+      poplar::program::Sequence{
+        poplar::program::Execute(compute_set_b_to_a),
+        poplar::program::Execute(compute_set_a_to_b)
+      }
+    )
+  );
+
+  programs.push_back(execute_this_compute_set);
+  programs.push_back(poplar::program::Copy(b, device_to_host));
 
   return programs;
 }
@@ -198,69 +207,46 @@ int main (int argc, char** argv) {
     // Attach to IPU device
     auto device = getDevice(options.num_ipus);
     auto &target = device.getTarget();
-    options.architecture = target.getTargetArchString();
     options.num_tiles_available = target.getNumTiles();
-    options.memory_available = target.getMemoryBytes();
-    for (std::size_t i = 0; i < options.num_tiles_available; ++i) {
-      options.random_perm.push_back(i);
-    }
-    if (options.random_tiles) {
-      std::random_shuffle(options.random_perm.begin(), options.random_perm.end());
-    }
-    workDivision(options);
+    options.tiles_per_ipu = options.num_tiles_available / options.num_ipus;
+    std::vector<float> initial_values = initializeValues(options);
+    workDivision(options); // AFTER initalizeValues()
 
     // Create graph object
     poplar::Graph graph{target};
     graph.addCodelets("codelets.gp");
 
     // Host variables (Load image or generate 2D grid)
-    std::vector<float> initial_values = initializeValues(options);
     unsigned area = initial_values.size();
     double inner_area = (options.height - 2.0) * (options.width - 2.0);
     double total_area = options.height * options.width;
     double flops_per_element = 6.0; // mid*gamma + alpha*(top + bottom + left + right)
     std::vector<float> ipu_results(area); // empty grid that can obtain the IPU result
     std::vector<float> cpu_results(area);
-    std::vector<double> TFLOPS;
-    std::vector<double> bandwidth_TB_S;
-    std::vector<double> MSE;
-    auto vertices = utils::getVertices();
+
     if (options.cpu) // perform CPU execution (and later compute MSE in IPU vs. CPU execution)
       cpu_results = heatEquationCpu(initial_values, options);
 
     auto programs = createIpuPrograms(graph, initial_values, options);
     auto exe = poplar::compileGraph(graph, programs);
     poplar::Engine engine(std::move(exe));
-    engine.connectStream("host_to_device_stream", &initial_values[0], &initial_values[area]);
-    engine.connectStream("device_to_host_stream", &ipu_results[0], &ipu_results[area]);
+    engine.connectStream("host_to_device_stream", &initial_values[0], &initial_values[total_area]);
+    engine.connectStream("device_to_host_stream", &ipu_results[0], &ipu_results[total_area]);
     engine.load(device);
 
-    int num_program_steps = programs.size();
     engine.run(0); // stream data to device
+    auto start = std::chrono::steady_clock::now();
+    engine.run(1); // Compute set execution
+    auto stop = std::chrono::steady_clock::now();
+    engine.run(2); // Stream of results
 
-    for (std::size_t i = 1; i < num_program_steps; i+= 2) {
-      auto start = std::chrono::steady_clock::now();
-      engine.run(i); // Compute set execution
-      auto stop = std::chrono::steady_clock::now();
-      engine.run(i+1); // Stream of results
-
-      // Report
-      auto diff = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
-      double wall_time = 1e-9*diff.count();
-      double flops = inner_area * options.num_iterations * flops_per_element / wall_time;
-      double bandwidth = inner_area * options.num_iterations * sizeof(float) / wall_time;
-      TFLOPS.push_back(flops*1e-12);
-      bandwidth_TB_S.push_back(bandwidth*1e-12);
-
-      if (options.cpu)
-        MSE.push_back(meanSquaredErrorInnerElements(ipu_results, cpu_results, options));
-    }
-
-    printGeneralInfo(options);
-    printLatexTabular(vertices, TFLOPS, bandwidth_TB_S);
+    // Report
+    auto diff = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
+    double wall_time = 1e-9*diff.count();
+    printResults(options, wall_time);
 
     if (options.cpu)
-      printMeanSquaredError(vertices, MSE);
+      printMeanSquaredError(ipu_results, cpu_results, options);
 
     if (options.in_file.length() != 0)
       saveImage(options, ipu_results);
