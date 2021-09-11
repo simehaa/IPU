@@ -5,6 +5,7 @@ main
 *.pyc
 *.out
 *.err
+*.bin
 *.sbatch
 *__pycache__*
 *figures*
