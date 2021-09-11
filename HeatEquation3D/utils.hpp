@@ -122,7 +122,6 @@ poplar::Device getDevice(utils::Options &options) {
 std::size_t side_length(std::size_t num_ipus, std::size_t base_length) {
   std::size_t log2_num_ipus = log(num_ipus) / log(2);
   std::size_t side = base_length*pow(1.26, log2_num_ipus);
-  // side -= (side % 48) - 2; // work load divisible by 8*6 (padding of 2 because of boundaries)
   return side;
 }
 

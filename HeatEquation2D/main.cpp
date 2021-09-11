@@ -204,6 +204,31 @@ int main (int argc, char** argv) {
     // Get options from command line arguments / defaults. (see utils.hpp)
     auto options = utils::parseOptions(argc, argv);
 
+    // Set up of 2D mesh properties
+    std::size_t base_length = 8200;
+    options.side = side_length(options.num_ipus, base_length);
+    // printMultiIpuGridInfo(base_length);
+    
+    // Check if user wanted to override dimensions (only do it if all three were given)
+    if (options.height == 0 && options.width == 0) {
+      // This block: none of the three were given, therefore
+      // construct a cubic mesh (default)
+      options.height = options.side;
+      options.width = options.side;
+    } else if (options.height != 0 && options.width != 0) {
+      // This block: both were given, hence options.height, options.width are good to go
+    } else {
+      // This block, means that one (but not both) were given
+      // Since that is ambiguous, use the default square mesh instead, 
+      // and warn the user to either provide BOTH or NONE
+      std::cout 
+        << "Warning: to override dimensions, please provide both: "
+        << "--height <h> --width <w>, and don't provide --in-file <file>. "
+        << "Using " << options.side << " for both dimensions\n";
+      options.height = options.side;
+      options.width = options.side;
+    }
+
     // Attach to IPU device
     auto device = getDevice(options.num_ipus);
     auto &target = device.getTarget();
