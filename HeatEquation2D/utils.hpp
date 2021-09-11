@@ -58,12 +58,12 @@ namespace utils {
     )
     (
       "height", 
-      po::value<std::size_t>(&options.height)->default_value(0),
+      po::value<std::size_t>(&options.height)->default_value(8000),
       "Heigth of a custom 2D grid. Will be overwritten if --in-file is used."
     )
     (
       "width",
-      po::value<std::size_t>(&options.width)->default_value(0),
+      po::value<std::size_t>(&options.width)->default_value(8000),
       "Width of a custom 2D grid. Will be overwritten if --in-file is used."
     )
     (
@@ -114,12 +114,6 @@ poplar::Device getDevice(unsigned numIpus) {
       return std::move(device);
 
   throw std::runtime_error("No hardware device available.");
-}
-
-std::size_t side_length(std::size_t num_ipus, std::size_t base_length) {
-  std::size_t log2_num_ipus = log(num_ipus) / log(2);
-  std::size_t side = base_length*pow(1.41, log2_num_ipus);
-  return side;
 }
 
 inline float randomFloat() {
