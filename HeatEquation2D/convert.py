@@ -18,6 +18,7 @@ def bin_to_jpg(in_file):
 
 
 def jpg_to_bin(in_file):
+    out_file = in_file.replace(".jpg", "")
     image = skimage.io.imread(in_file)
     if image.ndim < 3:
         image = np.expand_dims(image, axis=-1)
