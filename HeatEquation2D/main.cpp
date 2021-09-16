@@ -25,6 +25,7 @@ poplar::ComputeSet createComputeSet(
   unsigned num_workers_per_tile = graph.getTarget().getNumWorkerContexts();
   unsigned nh = options.splits[0]; // Number of splits in height
   unsigned nw = options.splits[1]; // Number of splits in width
+  std::size_t halo_volume = 0;
 
   // this double loop essentially iterated over the number of tiles (see tile_id below)
   for (std::size_t ipu = 0; ipu < options.num_ipus; ++ipu) {
@@ -48,12 +49,24 @@ poplar::ComputeSet createComputeSet(
         unsigned tile_height = block_size(x, nh, options.height-2);
         unsigned y_low = block_low(y, nw, inter_width-2) + 1;
         unsigned y_high = block_high(y, nw, inter_width-2) + 1;
+        unsigned tile_width = y_high - y_low;
 
-        std::vector<std::size_t> shape = {tile_height, y_high - y_low};
+        std::vector<std::size_t> shape = {tile_height, tile_width};
         if (area(shape) < area(options.smallest_slice))
           options.smallest_slice = shape;
         if (area(shape) > area(options.largest_slice))
           options.largest_slice = shape;
+
+        if ((x == 0) || (x == nh - 1)) {
+          halo_volume += tile_width;
+        } else {
+          halo_volume += 2*tile_width;
+        }
+        if ((y == 0) || (y == nw - 1)) { 
+          halo_volume += tile_height;
+        } else {
+          halo_volume += 2*tile_height;
+        }
 
         for (std::size_t worker_i = 0; worker_i < num_workers_per_tile; ++worker_i) {
           
@@ -84,6 +97,7 @@ poplar::ComputeSet createComputeSet(
       }
     }
   }
+  options.halo_volume = halo_volume;
 
   return compute_set;
 }

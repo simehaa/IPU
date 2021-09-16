@@ -31,6 +31,7 @@ namespace utils {
     std::size_t side;
     std::size_t tiles_per_ipu = 0;
     std::size_t num_tiles_available = 0;
+    std::size_t halo_volume = 0;
     std::vector<std::size_t> splits = {0,0};
     std::vector<std::size_t> smallest_slice = {std::numeric_limits<size_t>::max(),1};
     std::vector<std::size_t> largest_slice = {0,0};
@@ -52,7 +53,7 @@ namespace utils {
     )
     (
       "num-iterations",
-      po::value<unsigned>(&options.num_iterations)->default_value(100000),
+      po::value<unsigned>(&options.num_iterations)->default_value(1000),
       "PDE: number of iterations to execute on grid."
     )
     (
@@ -286,10 +287,10 @@ void printMeanSquaredError(
 void printResults(utils::Options &options, double wall_time) {
 
   // Calculate metrics
-  double inner_area = (double) (options.height - 2) * (double) (options.width - 2);
+  double inner_area = (double)(options.height - 2)*(double)(options.width - 2);
   double flops_per_element = 6.0;
-  double flops = inner_area * options.num_iterations * flops_per_element / wall_time;
-  double bandwidth = 6 * inner_area * options.num_iterations * sizeof(float) / wall_time;
+  double flops = inner_area*options.num_iterations*flops_per_element / wall_time;
+  double bandwidth = (5.0*inner_area + 2.0*options.halo_volume)*options.num_iterations*sizeof(float) / wall_time;
   double tflops = flops*1e-12;
   double bandwidth_TB_s = bandwidth*1e-12;
 
@@ -299,7 +300,7 @@ void printResults(utils::Options &options, double wall_time) {
     << "\nNo. IPUs           = " << options.num_ipus
     << "\nNo. Tiles          = " << options.num_tiles_available
     << "\nTotal Grid         = " << options.height << "*" << options.width << " = "
-                                  << options.height*options.width*1e-6 << " million elements"
+                                 << options.height*options.width*1e-6 << " million elements"
     << "\nSmallest tile grid = " << options.smallest_slice[0] << "*" << options.smallest_slice[1]
     << "\nLargest tile grid  = " << options.largest_slice[0] << "*" << options.largest_slice[1]
     << "\nalpha              = " << options.alpha
