@@ -10,7 +10,7 @@
 int main (int argc, char** argv)
 {
 	// Initialization of variables
-	int i, j, k, t, height = 20, width = 20, depth = 20, num_iterations = 100, opt;
+	int i, j, k, t, height = 360, width = 360, depth = 360, num_iterations = 100, opt;
 	float alpha = 0.1;
 	#ifndef _OPENMP
 		clock_t before, after;

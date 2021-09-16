@@ -6,7 +6,7 @@ for (int i = 0; i < n; ++i) {
     a[i] = b[i] + c[i]*scalar;
 }
 ```
-implemented in a highly parallelized fashion on the ipu.
+implemented in a highly parallelized fashion on the IPU.
 
 ## How to Run
 
@@ -19,5 +19,5 @@ $ ./main
 
 Generate the assembly code by
 ```
-$ popc --S codelets.cpp -o codelets.S -O3 -target=ipu1
+$ popc --S codelets.cpp -o codelets.S -O3 -target=ipu2
 ```

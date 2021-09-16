@@ -10,7 +10,7 @@
 int main (int argc, char** argv)
 {
 	// Initialization of variables
-	int i, j, k, height = 9386, width = 6530, num_iterations = 1000, opt;
+	int i, j, k, height = 8000, width = 8000, num_iterations = 1000, opt;
 	float alpha = 0.1;
 	#ifndef _OPENMP
 		clock_t before, after;
@@ -117,8 +117,8 @@ int main (int argc, char** argv)
 	printf("Iterations        : %d\n", num_iterations);
 	printf("alpha             : %g\n", alpha);
 	printf("Time              : %f s\n", time_used);
-	printf("Throughput        : %f GFLOPS\n", 1e-9*num_iterations*(height-2)*(width-2)*6/time_used);
-	printf("Minimal Bandwidth : %f GB/s\n", 1e-9*sizeof(float)*num_iterations*height*width*2.0/time_used);
+	printf("Throughput        : %f GFLOPS\n", 1e-9*(float)num_iterations*(float)(height-2)*(float)(width-2)*6/time_used);
+	printf("Minimal Bandwidth : %f GB/s\n", 1e-9*sizeof(float)*(float)num_iterations*(float)height*(float)width*2.0/time_used);
 
 	return EXIT_SUCCESS;
 }

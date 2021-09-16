@@ -388,18 +388,13 @@ void printPerformance(double wall_time, utils::Options &options) {
   double flops_per_element = 28.0;
   double elements_per_time = (double) options.height * (double) options.width * (double) options.num_iterations / (double) wall_time;
   double flops = flops_per_element * elements_per_time;
-  double loaded_elems_per_stencil = 6; // 5-point stencil for e + 1 point from r
-  double stored_elems_per_stencil = 2; // 1 for e, 1 for r
-  double total_elems_per_stencil = loaded_elems_per_stencil + stored_elems_per_stencil;
-  double bandwidth_base = elements_per_time * sizeof(float);
-  double load_bw = loaded_elems_per_stencil*bandwidth_base;
-  double store_bw = stored_elems_per_stencil*bandwidth_base;
-  double total_bw = total_elems_per_stencil*bandwidth_base;
+  double mem_ops_per_stencil = 8; // 6 loads (5-point stencil for e, and r) + 2 stores (e and r)
+  double minimal_bw = mem_ops_per_stencil * elements_per_time * sizeof(float);
   std::cout
     << "\nPerformance"
-    << "\n-----------"
-    << "\nTime       = " << wall_time << " s"
-    << "\nThroughput = " << flops*1e-12 << " TFLOPS"
-    << "\nMinimal BW = " << total_bw*1e-12 << " TB/s"
+    << "\n-----------" << std::fixed
+    << "\nTime       = " << std::setprecision(2) << wall_time << " s"
+    << "\nThroughput = " << std::setprecision(2) << flops*1e-12 << " TFLOPS"
+    << "\nMinimal BW = " << std::setprecision(2) << minimal_bw*1e-12 << " TB/s"
     << "\n\n";
 }

@@ -1,6 +1,7 @@
 #include <cstdlib> // random numbers
 #include <chrono> // measuring wall time
 #include <string>
+#include <iomanip>
 #include <poplar/DeviceManager.hpp>
 #include <poplar/Engine.hpp>
 
@@ -23,8 +24,13 @@ poplar::Device getDevice(unsigned int num_ipus) {
 int main (int argc, char** argv) {
   std::size_t num_ipus = 1;
   std::size_t num_iterations = 100000;
-  std::size_t size_per_worker = 1024;
-  std::string vertex = "TriadVertexMemoryAlignment";
+  std::size_t size_per_worker = 7500;
+  float q = randomFloat();
+  std::vector<std::string> vertices = {
+    "TriadVertex",
+    "TriadVertexMemory",
+    "TriadVertexAssembly",
+  };
 
   // Attach to IPU device
   auto device = getDevice(num_ipus);
@@ -41,16 +47,18 @@ int main (int argc, char** argv) {
   auto b = graph.addVariable(poplar::FLOAT, {num_tiles, num_worker_contexts, size_per_worker}, "b");
   auto c = graph.addVariable(poplar::FLOAT, {num_tiles, num_worker_contexts, size_per_worker}, "c");
 
-  // Host variables
-  std::size_t total_size = a.numElements();
-  std::vector<float> host_a(total_size);
-  std::vector<float> host_b(total_size);
-  std::vector<float> host_c(total_size);
-  float q = randomFloat();
-  for (std::size_t i = 0; i < total_size; ++i) {
-    host_b[i] = randomFloat();
-    host_c[i] = randomFloat();
-  }
+   // Define data streams
+  auto device_to_host_a = graph.addDeviceToHostFIFO("a_stream", poplar::FLOAT, a.numElements());
+  auto host_to_device_b = graph.addHostToDeviceFIFO("b_stream", poplar::FLOAT, b.numElements());
+  auto host_to_device_c = graph.addHostToDeviceFIFO("c_stream", poplar::FLOAT, c.numElements());
+
+  // Poplar program definitions (add the first program that streams data to device)
+  std::vector<poplar::program::Program> programs = {
+    poplar::program::Sequence({
+      poplar::program::Copy(host_to_device_b, b),
+      poplar::program::Copy(host_to_device_c, c)
+    })
+  };
   
   // Perform tile mapping of a
   for (std::size_t i = 0; i < num_tiles; ++i) {
@@ -61,53 +69,49 @@ int main (int argc, char** argv) {
   graph.setTileMapping(b, graph.getTileMapping(a));
   graph.setTileMapping(c, graph.getTileMapping(a));
 
-  // Create compute set object
-  auto compute_set = graph.addComputeSet();
+  for (auto vertex : vertices) {
+    // Create compute set object
+    auto compute_set = graph.addComputeSet(vertex + "ComputeSet");
 
-  // Assign vertices to this compute set
-  for (std::size_t i = 0; i < num_tiles; ++i) {
-    // There will be num_worker_contexts (6) vertices per tile (not a requirement)
-    for (std::size_t j = 0; j < num_worker_contexts; ++j) {
-      // Declare and assign vertex to a tile
-      auto v = graph.addVertex(compute_set, vertex);
-      graph.connect(v["a"], a[i][j]); // since we index twice, the resulting slices are 1D
-      graph.connect(v["b"], b[i][j]); 
-      graph.connect(v["c"], c[i][j]);
-      graph.setInitialValue(v["q"], q);
-      graph.setTileMapping(v, i); // map vertex to tile i
+    // Assign vertices to this compute set
+    for (std::size_t i = 0; i < num_tiles; ++i) {
+      // There will be num_worker_contexts (6) vertices per tile (not a requirement)
+      for (std::size_t j = 0; j < num_worker_contexts; ++j) {
+        // Declare and assign vertex to a tile
+        auto v = graph.addVertex(compute_set, vertex);
+        graph.connect(v["a"], a[i][j]); // since we index twice, the resulting slices are 1D
+        graph.connect(v["b"], b[i][j]); 
+        graph.connect(v["c"], c[i][j]);
+        graph.setInitialValue(v["q"], q);
+        graph.setTileMapping(v, i); // map vertex to tile i
+      }
     }
+
+    // Add compute set of the ith vertex
+    programs.push_back(poplar::program::Repeat(
+      num_iterations,
+      poplar::program::Sequence{
+        poplar::program::WriteUndef(a),
+        poplar::program::Execute(compute_set)
+      }
+    ));
+
+    // Get results from the ith vertex
+    programs.push_back(poplar::program::Copy(a, device_to_host_a));
   }
-
-  // Define data streams
-  auto device_to_host_a = graph.addDeviceToHostFIFO("a_stream", poplar::FLOAT, a.numElements());
-  auto host_to_device_b = graph.addHostToDeviceFIFO("b_stream", poplar::FLOAT, b.numElements());
-  auto host_to_device_c = graph.addHostToDeviceFIFO("c_stream", poplar::FLOAT, c.numElements());
-
-  // Poplar program definitions 
-  auto host_to_device = poplar::program::Sequence({
-    poplar::program::Copy(host_to_device_b, b),
-    poplar::program::Copy(host_to_device_c, c)
-  });
-
-  auto inner_loop = poplar::program::Repeat(
-    num_iterations,
-    poplar::program::Sequence{
-      poplar::program::WriteUndef(a),
-      poplar::program::Execute(compute_set)
-    }
-  );
-
-  auto device_to_host = poplar::program::Copy(a, device_to_host_a);
-
-  // Bundle programs into a vector
-  std::vector<poplar::program::Program> programs{
-    host_to_device, 
-    inner_loop, 
-    device_to_host
-  };
 
   // Compilation of graph
   auto exe = poplar::compileGraph(graph, programs);
+
+  // Host variables
+  std::size_t total_size = a.numElements();
+  std::vector<float> host_a(total_size);
+  std::vector<float> host_b(total_size);
+  std::vector<float> host_c(total_size);
+  for (std::size_t i = 0; i < total_size; ++i) {
+    host_b[i] = randomFloat();
+    host_c[i] = randomFloat();
+  }
 
   // Use engine to control device executions and data streams
   poplar::Engine engine(std::move(exe));
@@ -119,36 +123,58 @@ int main (int argc, char** argv) {
   // Host to Device
   engine.run(0);
 
-  // Execute compute set (repeatedly) and evalute wall time
-  auto start = std::chrono::steady_clock::now();
-  engine.run(1);
-  auto stop = std::chrono::steady_clock::now();
+  std::cout << "Memory used = " << 3*host_a.size()*sizeof(float)*1e-6 << " MB\n";
 
-  // Device to Host
-  engine.run(2);
+  // Print LaTeX tabular
+  std::cout 
+    << "\\begin{tabular}{lllll}\n"
+    << "\\toprule\n"
+    << "Vertex & Throughput & Minimal & \\% of Peak & Relative \\\\\n"
+    << "Name & [TFLOPS] & Bandwidth & Performance & Performance \\\\\n"
+    << "\\midrule\n";
+  double tflops_first_vertex;
 
-  // Report findings
-  auto diff = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
-  double time_seconds = 1e-9*diff.count(); // from nano seconds
-  float clock_frequency = target.getTileClockFrequency(); // 1330 MHz (GC200 MK2)
-  float minimal_bandwidth = num_iterations*total_size*2*sizeof(float); // b and c
-  auto theoretical_max_bandwidth = 4*sizeof(float)*clock_frequency*num_tiles;
-  float total_squared_error = 0.0, error;
-  for (std::size_t i = 0; i < host_a.size(); ++i) {
-    error = (host_a[i]) - (host_b[i] + q*host_c[i]); 
-    total_squared_error += error*error;
+  // Execute one vertex at a time and print results
+  for (std::size_t i = 0; i < vertices.size(); ++i) {
+    // Execute compute set (repeatedly) and evalute wall time
+    auto start = std::chrono::steady_clock::now();
+    engine.run(2*i + 1);
+    auto stop = std::chrono::steady_clock::now();
+
+    // Device to Host
+    engine.run(2*i + 2);
+
+    // Report findings
+    auto diff = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
+    double time_seconds = 1e-9*diff.count(); // from nano seconds
+    double clock_frequency = target.getTileClockFrequency(); // 1330 MHz (GC200 MK2)
+    double tflops = 1e-12*(num_iterations*total_size*2)/time_seconds;
+    double minimal_bandwidth = 1e-12*num_iterations*total_size*3*sizeof(float)/time_seconds; // store to a, and load from b and c
+    double theoretical_max_bandwidth = 1e-12*3*2*sizeof(float)*clock_frequency*num_tiles;
+    double percentage_of_peak = 100*minimal_bandwidth/theoretical_max_bandwidth;
+    if (i == 0)
+      tflops_first_vertex = tflops;
+    double relative_performance = (i == 0) ? 1.0 : tflops/tflops_first_vertex;
+
+    // Error control
+    double total_squared_error = 0.0, error;
+    for (std::size_t i = 0; i < host_a.size(); ++i) {
+      error = (host_a[i]) - (host_b[i] + q*host_c[i]); 
+      total_squared_error += error*error;
+    }
+    if (total_squared_error != 0.0) 
+      std::cout << "Warning: total squared error = " << total_squared_error << "\n";
+
+    // Print results
+    std::cout 
+      << vertices[i] << " & " << std::fixed
+      << std::setprecision(2) << tflops << " & " 
+      << std::setprecision(2) << minimal_bandwidth << " TB/s & " 
+      << std::setprecision(2) << percentage_of_peak << " & " 
+      << std::setprecision(2) << relative_performance << " \\\\\n";
   }
 
-  // Print results
-  std::cout <<
-      "Vertex:              " << vertex <<
-    "\nSize per worker      " << size_per_worker <<
-    "\nNumber of IPUs       " << num_ipus <<
-    "\nNumber of tiles      " << num_tiles <<
-    "\nNumber of iterations " << num_iterations << 
-    "\nFLOPS                " << 1e-12*(num_iterations*total_size*2)/time_seconds << " TFLOPS"
-    "\nMinimal bandwidth    " << 1e-12*minimal_bandwidth << " TB/s" <<
-    "\nTotal squared error  " << total_squared_error << "\n";
+  std::cout << "\\bottomrule\n\\end{tabular}\n";
 
   return EXIT_SUCCESS;
 }

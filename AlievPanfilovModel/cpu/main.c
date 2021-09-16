@@ -49,6 +49,10 @@ int main (int argc, char** argv) {
 		}
 	}
 
+	// Pad the 2D grid to handle boundary condition
+	height += 2;
+	width += 2;
+
 	// Allocate matrices
 	float **tmp; // temporary pointer to perform pointer swaps
 	float **e = (float**) malloc(height*sizeof(float*));
@@ -90,25 +94,34 @@ int main (int argc, char** argv) {
 			
 		// Perform Forward-Euler Aliev-Panfilov model
 		for (t = 0; t < num_iterations; ++t) {
-			#pragma omp for
-				for (i = 1; i < height - 1; ++i) {
-					for (j = 1; j < width - 1; ++j) {
-            // Boundary condition
-            west = (j == 0) ? e[i][j+1] : e[i][j-1];
-            east = (j == width - 1) ? e[i][j-1] : e[i][j+1];
-            north = (i == 0) ? e[i+1][j] : e[i-1][j];
-            south = (i == height - 1) ? e[i-1][j] : e[i+1][j];
-            
-            // Computation of new e
-            e_bar[i][j] = e[i][j] + dt*(
-              d_dx2*(-4*e[i][j] + west + east + south + north) - 
-              k*e[i][j]*(e[i][j] - a)*(e[i][j] - 1) - e[i][j]*r[i][j]
-            );
 
-            // Computation of new r
-            r[i][j] = r[i][j] + dt*(-epsilon - my1*r[i][j]/(my2 + e[i][j]))*(r[i][j] + k*e[i][j]*(e[i][j] - b - 1));
-          }
-        }
+			// Copy immediate inner values to boundaries
+			#pragma omp for
+			for (i = 1; i < height - 1; ++i) {
+				e[i][0] = e[i][2];
+				e[i][width - 1] = e[i][width - 3];
+			}	
+
+			#pragma omp for
+			for (j = 1; j < width - 1; ++j) {
+				e[0][j] = e[2][j];
+				e[height - 1][j] = e[height - 3][j];
+			}
+
+			#pragma omp for
+			for (i = 1; i < height - 1; ++i) {
+				for (j = 1; j < width - 1; ++j) {
+					
+					// Computation of new e
+					e_bar[i][j] = e[i][j] + dt*(
+						d_dx2*(-4*e[i][j] + west + east + south + north) - 
+						k*e[i][j]*(e[i][j] - a)*(e[i][j] - 1) - e[i][j]*r[i][j]
+					);
+
+					// Computation of new r
+					r[i][j] = r[i][j] + dt*(-epsilon - my1*r[i][j]/(my2 + e[i][j]))*(r[i][j] + k*e[i][j]*(e[i][j] - b - 1));
+				}
+			}
 			#pragma omp single
 			{
 				// Pointer swap
@@ -137,6 +150,11 @@ int main (int argc, char** argv) {
 	free(e);
 	free(e_bar);
 	free(r);
+
+	// Revert to original height and width (which also correpsponds to the actual 
+	// height and width that computations were performed on)
+	height -= 2; 
+	width -= 2;
 
 	// Report parameters and results
 	printf("2D Grid           : %d x %d\n", height, width);
