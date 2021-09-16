@@ -18,7 +18,7 @@ int main (int argc, char** argv)
 		double before, after;
 	#endif
 		double time_used;
-  
+
 	// Parsing command-line options
 	while ((opt = getopt(argc, argv, "h:w:t:a:")) != -1) {
 		switch (opt) {
@@ -54,8 +54,8 @@ int main (int argc, char** argv)
 
 	// Instantiate random values in matrices
 	#pragma omp parallel for private(j)
-    for (i = 0; i < height; ++i) {
-      for (j = 0; j < width; ++j) {
+	for (i = 0; i < height; ++i) {
+		for (j = 0; j < width; ++j) {
 			a[i][j] = (float) rand() / (float) (RAND_MAX);
 			b[i][j] = a[i][j];
 		}
@@ -67,7 +67,7 @@ int main (int argc, char** argv)
 	#else
 		before = omp_get_wtime();
 	#endif
-  
+
 	// Perform computations
 	#pragma omp parallel private(i,j,k)
 	{
@@ -78,13 +78,14 @@ int main (int argc, char** argv)
 			fflush(NULL);
 		}
 		#endif
-			
+
 		// Perform heat equation
 		for (k = 0; k < num_iterations; ++k) {
 			#pragma omp for
-				for (i = 1; i < height - 1; ++i)
-					for (j = 1; j < width - 1; ++j)
-						b[i][j] = beta*a[i][j] + alpha*(a[i-1][j] + a[i][j-1] + a[i][j+1] + a[i+1][j]);
+			for (i = 1; i < height - 1; ++i)
+				for (j = 1; j < width - 1; ++j)
+					b[i][j] = beta*a[i][j] + alpha*(a[i-1][j] + a[i][j-1] + a[i][j+1] + a[i+1][j]);
+
 			#pragma omp single
 			{
 				// pointer swap
@@ -94,7 +95,7 @@ int main (int argc, char** argv)
 			}
 		}
 	}
-	
+
 	// End timer and evaluate time used
 	#ifndef _OPENMP
 		after = clock();
