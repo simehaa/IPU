@@ -10,7 +10,7 @@
 int main (int argc, char** argv)
 {
 	// Initialization of variables
-	int i, j, k, t, height = 360, width = 360, depth = 360, num_iterations = 100, opt;
+	int i, j, k, t, height = 360, width = 360, depth = 360, num_iterations = 1000, opt;
 	float alpha = 0.1;
 	#ifndef _OPENMP
 		clock_t before, after;
@@ -18,7 +18,7 @@ int main (int argc, char** argv)
 		double before, after;
 	#endif
 		double time_used;
-  
+
 	// Parsing command-line options
 	while ((opt = getopt(argc, argv, "h:w:d:t:a:")) != -1) {
 		switch (opt) {
@@ -28,7 +28,7 @@ int main (int argc, char** argv)
 			case 'w':
 				width = atoi(optarg);
 				break;
-      case 'd':
+			case 'd':
 				depth = atoi(optarg);
 				break;
 			case 't':
@@ -53,20 +53,20 @@ int main (int argc, char** argv)
 	for (i = 0; i < height; ++i) {
 		a[i] = (float**) malloc(width*sizeof(float*));
 		b[i] = (float**) malloc(width*sizeof(float*));
-    for (j = 0; j < width; ++j) {
-      a[i][j] = (float*) malloc(depth*sizeof(float));
-		  b[i][j] = (float*) malloc(depth*sizeof(float));
-    }
+		for (j = 0; j < width; ++j) {
+			a[i][j] = (float*) malloc(depth*sizeof(float));
+			b[i][j] = (float*) malloc(depth*sizeof(float));
+		}
 	}
 
 	// Instantiate random values in matrices
 	#pragma omp parallel for private(j)
-  for (i = 0; i < height; ++i) {
-    for (j = 0; j < width; ++j) {
-      for (k = 0; k < depth; ++k) {
-        a[i][j][k] = (float) rand() / (float) (RAND_MAX);
-        b[i][j][k] = a[i][j][k];
-      }
+	for (i = 0; i < height; ++i) {
+		for (j = 0; j < width; ++j) {
+			for (k = 0; k < depth; ++k) {
+				a[i][j][k] = (float) rand() / (float) (RAND_MAX);
+				b[i][j][k] = a[i][j][k];
+			}
 		}
 	}
 
@@ -76,7 +76,7 @@ int main (int argc, char** argv)
 	#else
 		before = omp_get_wtime();
 	#endif
-  
+
 	// Perform computations
 	#pragma omp parallel private(t,i,j,k)
 	{
@@ -87,15 +87,15 @@ int main (int argc, char** argv)
 			fflush(NULL);
 		}
 		#endif
-			
+
 		// Perform heat equation
 		for (t = 0; t < num_iterations; ++t) {
 			#pragma omp for
-				for (i = 1; i < height - 1; ++i)
-					for (j = 1; j < width - 1; ++j)
-					  for (k = 1; k < depth - 1; ++k)
-						  b[i][j][k] = beta*a[i][j][k] + alpha*(
-                a[i+1][j][k] + a[i-1][j][k] + a[i][j+1][k] + a[i][j-1][k] + a[i][j][k+1] + a[i][j][k-1]);
+			for (i = 1; i < height - 1; ++i)
+				for (j = 1; j < width - 1; ++j)
+					for (k = 1; k < depth - 1; ++k)
+						b[i][j][k] = beta*a[i][j][k] + alpha*(
+							a[i+1][j][k] + a[i-1][j][k] + a[i][j+1][k] + a[i][j-1][k] + a[i][j][k+1] + a[i][j][k-1]);
 			#pragma omp single
 			{
 				// pointer swap
@@ -105,35 +105,38 @@ int main (int argc, char** argv)
 			}
 		}
 	}
-	
+
 	// End timer and evaluate time used
 	#ifndef _OPENMP
 		after = clock();
 		time_used = (float) (after - before) / (float) CLOCKS_PER_SEC;
-	#else
+		#else
 		after = omp_get_wtime();
 		time_used = after - before;
 	#endif
 
 	// deallocate matrices
 	for (i = 0; i < height; ++i) {
-	  for (j = 0; j < width; ++j) {
-		  free(a[i][j]);
-		  free(b[i][j]);
-    }
-    free(a[i]);
-    free(b[i]);
-  }
+		for (j = 0; j < width; ++j) {
+			free(a[i][j]);
+			free(b[i][j]);
+		}
+		free(a[i]);
+		free(b[i]);
+	}
 	free(a);
 	free(b);
 
 	// Report parameters and results
+	float base = 1e-9*(float)num_iterations/time_used;
+	float gflops = base*(float)(height-2)*(float)(width-2)*(float)(depth-2)*8.0;
+	float bandwidth = base*sizeof(float)*(float)height*(float)width*(float)depth*2.0;
 	printf("3D Grid           : %d x %d x %d\n", height, width, depth);
 	printf("Iterations        : %d\n", num_iterations);
 	printf("alpha             : %g\n", alpha);
 	printf("Time              : %f s\n", time_used);
-	printf("Throughput        : %f GFLOPS\n", 1e-9*num_iterations*(height-2)*(width-2)*(depth-2)*8/time_used);
-	printf("Minimal Bandwidth : %f GB/s\n", 1e-9*sizeof(float)*num_iterations*height*width*depth*2.0/time_used);
+	printf("Throughput        : %f GFLOPS\n", gflops);
+	printf("Minimal Bandwidth : %f GB/s\n", bandwidth);
 
 	return EXIT_SUCCESS;
 }

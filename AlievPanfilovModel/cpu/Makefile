@@ -1,4 +1,4 @@
-CC = gcc-11
+CC = g++-11
 CFLAGS = -O3 -fopenmp
 TARGETS = main
 OBJECTS = main.o
