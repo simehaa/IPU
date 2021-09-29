@@ -1,13 +1,13 @@
 # General Scientific Computing Workloads for the IPU
 
-Computational workloads from general scientific computing have been solved on the intelligence processing unit (IPU). This work is part of a master's thesis with University of Oslo (UiO) and Simula, submitted October 2021.
+Computational workloads from general scientific computing have been solved on the [intelligence processing unit](https://www.graphcore.ai/products/ipu) (IPU). This work is part of a master's thesis with University of Oslo (UiO) and Simula, submitted October 2021.
 
 ## Contents
 
 * The **Aliev-Panfilov model** is a set of PDEs which model propagation of electric potentials in cardiac tissues. A numerical algorithm, derived by using the forward-Euler solution, was implemented on the IPU and applied on a 2D mesh.
 * The **2D heat equation** is a PDE which describes propagation of heat. It was discretized by finite differences, more specifically the explicit scheme found by employing the *forward difference in time* and *central different in space*. This became a 5-point stencil-based algorithm, which was applied on a 2D mesh on the IPU.
 * The **3D heat equation** extended the heat eq. to 3D meshes. It was implemented as a 7-point stencil-based algorithm for the IPU.
-* The **STREAM Triad** benchmark is a common benchmark for CPUs, which solves the kernel `a[i] = b[i] + q*c[i]`. It was implemented as a guide to getting started with IPU programming and served as a benchmark for the peak performance of the IPU.
+* The [STREAM Triad](http://www.cs.virginia.edu/stream/) benchmark is a common benchmark for CPUs, which solves the kernel `a[i] = b[i] + q*c[i]`. It was implemented as a guide to getting started with IPU programming and served as a benchmark for the peak performance of the IPU.
 
 The 2D and 3D heat equation codes were specifically implemented to be used on both single-IPU and multi-IPU executions.
 
