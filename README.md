@@ -32,14 +32,14 @@ The algorithms were implemented and executed on two processors:
 
 The heat equation and Aliev-Panfilov model were executed on one IPU and on a Linux server with 2 CPUs. All executions ran for 1000 time steps. The measured performance is shown in the table below:
 
-| Processor | Problem             | Mesh        | Time   | Throughput  | Throughput/core  | Minimal Bandwidth |
-| --------- | ------------------- | ----------- | ------ | ----------- | ---------------- | ----------------- |
-| CPU       | 2D heat equation    | 8000x8000   | 4.05 s | 94.7 GFLOPS | 1.48 GFLOPS/core | 126.4 GB/s        |
-| CPU       | 3D heat equation    | 360x360x360 | 8.83 s | 41.6 GFLOPS | 0.65 GFLOPS/core | 42.3 GB/s         |
-| CPU       | Aliev-Panfilov model | 7000x7000   | 20.5 s | 66.9 GFLOPS | 1.05 GFLOPS/core | 19.1 GB/s         |
-| IPU       | 2D heat equation    | 8000x8000   | 0.30 s | 1.28 TFLOPS | 0.87 GFLOPS/core | 4.28 TB/s         |
-| IPU       | 3D heat equation    | 360x360x360 | 0.26 s | 1.44 TFLOPS | 0.98 GFLOPS/core | 5.15 TB/s         |
-| IPU       | Aliev-Panfilov model | 7000x7000   | 1.09 s | 1.26 TFLOPS | 0.86 GFLOPS/core | 1.45 TB/s         |
+| Processor | Problem     | Mesh        | Time   | Throughput  | Throughput/core  | Minimal Bandwidth |
+| --------- | ----------- | ----------- | ------ | ----------- | ---------------- | ----------------- |
+| CPU       | 2D heat eq. | 8000x8000   | 4.05 s | 94.7 GFLOPS | 1.48 GFLOPS | 126.4 GB/s        |
+| CPU       | 3D heat eq. | 360x360x360 | 8.83 s | 41.6 GFLOPS | 0.65 GFLOPS | 42.3 GB/s         |
+| CPU       | A-P model   | 7000x7000   | 20.5 s | 66.9 GFLOPS | 1.05 GFLOPS | 19.1 GB/s         |
+| IPU       | 2D heat eq. | 8000x8000   | 0.30 s | 1.28 TFLOPS | 0.87 GFLOPS | 4.28 TB/s         |
+| IPU       | 3D heat eq. | 360x360x360 | 0.26 s | 1.44 TFLOPS | 0.98 GFLOPS | 5.15 TB/s         |
+| IPU       | A-P model   | 7000x7000   | 1.09 s | 1.26 TFLOPS | 0.86 GFLOPS | 1.45 TB/s         |
 
 ### Multi-IPU Executions
 
@@ -47,13 +47,13 @@ The heat equation was applied to 2D, and 3D meshes on executions ranging from 1 
 
 | No. IPUs | Problem | Mesh        | Time   | Throughput  | Throughput/core  | Minimal Bandwidth |
 | -------- | ------- | ----------- | ------ | ----------- | ---------------- | ----------------- |
-| 1        | 2D      | 8000x8000   | 0.30 s | 1.28 TFLOPS | 0.87 GFLOPS/core | 4.28 GB/s         |
-| 2        | 2D      | 10000x10000 | 0.28 s | 2.17 TFLOPS | 0.74 GFLOPS/core | 7.20 GB/s         |
-| 4        | 2D      | 14000x14000 | 0.27 s | 4.35 TFLOPS | 0.74 GFLOPS/core | 14.6 GB/s         |
-| 8        | 2D      | 19000x19000 | 0.25 s | 8.59 TFLOPS | 0.74 GFLOPS/core | 29.1 GB/s         |
-| 16       | 2D      | 27000x27000 | 0.25 s | 17.2 TFLOPS | 0.73 GFLOPS/core | 58.9 GB/s         |
-| 1        | 3D      | 360x360x360 | 0.26 s | 1.44 TFLOPS | 0.98 GFLOPS/core | 5.15 GB/s         |
-| 2        | 3D      | 403x403x403 | 0.23 s | 2.30 TFLOPS | 0.78 GFLOPS/core | 8.30 GB/s         |
-| 4        | 3D      | 508x508x508 | 0.26 s | 4.05 TFLOPS | 0.69 GFLOPS/core | 14.7 GB/s         |
-| 8        | 3D      | 640x640x640 | 0.26 s | 7.99 TFLOPS | 0.68 GFLOPS/core | 29.1 GB/s         |
-| 16       | 3D      | 806x806x806 | 0.32 s | 13.2 TFLOPS | 0.56 GFLOPS/core | 48.0 GB/s         |
+| 1        | 2D      | 8000x8000   | 0.30 s | 1.28 TFLOPS | 0.87 GFLOPS | 4.28 GB/s         |
+| 2        | 2D      | 10000x10000 | 0.28 s | 2.17 TFLOPS | 0.74 GFLOPS | 7.20 GB/s         |
+| 4        | 2D      | 14000x14000 | 0.27 s | 4.35 TFLOPS | 0.74 GFLOPS | 14.6 GB/s         |
+| 8        | 2D      | 19000x19000 | 0.25 s | 8.59 TFLOPS | 0.74 GFLOPS | 29.1 GB/s         |
+| 16       | 2D      | 27000x27000 | 0.25 s | 17.2 TFLOPS | 0.73 GFLOPS | 58.9 GB/s         |
+| 1        | 3D      | 360x360x360 | 0.26 s | 1.44 TFLOPS | 0.98 GFLOPS | 5.15 GB/s         |
+| 2        | 3D      | 403x403x403 | 0.23 s | 2.30 TFLOPS | 0.78 GFLOPS | 8.30 GB/s         |
+| 4        | 3D      | 508x508x508 | 0.26 s | 4.05 TFLOPS | 0.69 GFLOPS | 14.7 GB/s         |
+| 8        | 3D      | 640x640x640 | 0.26 s | 7.99 TFLOPS | 0.68 GFLOPS | 29.1 GB/s         |
+| 16       | 3D      | 806x806x806 | 0.32 s | 13.2 TFLOPS | 0.56 GFLOPS | 48.0 GB/s         |
