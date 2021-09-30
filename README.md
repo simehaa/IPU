@@ -1,4 +1,4 @@
-# General Scientific Computing Workloads for the IPU
+# General Scientific Computing Workloads on the IPU
 
 Computational workloads from general scientific computing have been solved on the [intelligence processing unit](https://www.graphcore.ai/products/ipu) (IPU). This work is part of a master's thesis with University of Oslo (UiO) and Simula, submitted October 2021.
 
