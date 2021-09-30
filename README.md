@@ -28,6 +28,8 @@ The algorithms were implemented and executed on two processors:
 | Two AMD Epyc 7601 32-core CPUs | Standard C | OpenMP 4.5         | 64    | 128     | GCC 11.1.0 with -O3 |
 | One Colossus GC200 MK2 IPU     | C++        | Poplar SDK 2.2.0   | 1472  | 8832    | GCC 7.5.0 with -O3  |
 
+**Note**: all executions used single precision 32-bit floats.
+
 ### Single-IPU Executions
 
 The heat equation and Aliev-Panfilov model were executed on one IPU and on a Linux server with 2 CPUs. All executions ran for 1000 time steps. The measured performance is shown in the table below:
