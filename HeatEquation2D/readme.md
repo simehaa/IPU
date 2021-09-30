@@ -11,9 +11,10 @@ $ ./main
 
 Additionally, command line arguments can be provided:
 ```
-$ ./main --height 8000 --width 8000 --num-iterations 1000 --alpha 0.1 --cpu --vertex HeatEquationOptimized --in-file infile.bin --out-file outfile.bin
+$ ./main --height 8000 --width 8000 --num-iterations 1000 --num-ipus 1 --alpha 0.1 --cpu --vertex HeatEquationOptimized --in-file infile.bin --out-file outfile.bin
 ```
 * `--height` and `--width` corresponds to the mesh to be used.
+* `--num-ipus` specifies how many IPUs to perform the computations on.
 * `--num-iterations` is the number of time steps to perform the computations for.
 * `--alpha` is a constant in the heat equation (kappa*dt/h^2).
 * `--cpu` will enable an additional CPU execution, and the IPU results will be checked against the CPU results.
