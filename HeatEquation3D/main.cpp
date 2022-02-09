@@ -241,6 +241,7 @@ int main (int argc, char** argv) {
       options.width = options.side;
       options.depth = options.side;
     }
+    std::cout << options.side << "\n";
 
     // Attach to IPU device
     auto device = getDevice(options);

@@ -1,11 +1,12 @@
 POPC ?= popc
 PROTOC ?= protoc
 
-LDLIBS ?= -lpoplar -lpoputil -lpopops -lboost_program_options -lprotobuf
+LDLIBS ?= -lpoplar -lboost_program_options
 SOURCES = main.cpp
 TARGETS = main
 
-CPPFLAGS ?= -std=c++11
+CXX = g++-11
+CPPFLAGS ?= -std=c++20
 CXXFLAGS ?= -O3
 POPXXFLAGS ?= -O3 -target=ipu2
 
