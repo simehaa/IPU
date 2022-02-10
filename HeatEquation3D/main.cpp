@@ -57,8 +57,9 @@ poplar::ComputeSet createComputeSet(
           unsigned tile_width = block_size(y, nw, options.width-2);
           unsigned z_low = block_low(z, nd, inter_depth-2) + 1;
           unsigned z_high = block_high(z, nd, inter_depth-2) + 1;
+          unsigned tile_depth = z_high - z_low;
 
-          std::vector<std::size_t> shape = {tile_height, tile_width, z_high - z_low};
+          std::vector<std::size_t> shape = {tile_height, tile_width, tile_depth};
           if (volume(shape) < volume(options.smallest_slice))
             options.smallest_slice = shape;
           if (volume(shape) > volume(options.largest_slice)) 
@@ -74,7 +75,7 @@ poplar::ComputeSet createComputeSet(
           } else {
             halo_volume += 2*tile_height*tile_depth;
           }
-          if ((z == 0) || (z == nz - 1)) { 
+          if ((z == 0) || (z == nd - 1)) { 
             halo_volume += tile_height*tile_width;
           } else {
             halo_volume += 2*tile_height*tile_width;
